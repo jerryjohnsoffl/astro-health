@@ -3,6 +3,11 @@ import { FEATURE_NAMES } from './features.js'
 import { encodeCDSSRecord, normalizeEcgWindow, validateSleepWindow } from './preprocessing.js'
 
 const modelIds = new Set(['cdss-mlp', 'ecg_model', 'sleep-cnn'])
+const modelAssetDirectories = {
+  'cdss-mlp': 'cdss-mlp',
+  ecg_model: 'ecg-cnn',
+  'sleep-cnn': 'sleep-cnn',
+}
 const modelPromises = new Map()
 
 function reportModelStatus(modelId, status, error = null) {
@@ -19,12 +24,21 @@ async function loadModel(modelId) {
       reportModelStatus(modelId, 'loading')
       try {
         const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '')
-        const modelAssetBase = new URL(`${baseUrl}/models/${modelId}/`, self.location.origin).toString()
-        const metaResponse = await fetch(`${modelAssetBase}meta.json`)
+        const modelAssetBase = new URL(
+          `${baseUrl}/models/${modelAssetDirectories[modelId]}/`,
+          self.location.origin,
+        ).toString()
+        const metaUrl = `${modelAssetBase}meta.json`
+        const metaResponse = await fetch(metaUrl)
         if (!metaResponse.ok) {
           throw new Error(`Could not load ${modelId} metadata (${metaResponse.status}).`)
         }
-        const meta = await metaResponse.json()
+        let meta
+        try {
+          meta = JSON.parse(await metaResponse.text())
+        } catch {
+          throw new Error(`Model metadata at ${metaUrl} was not valid JSON.`)
+        }
         if (modelId === 'cdss-mlp' && JSON.stringify(meta.featureNames) !== JSON.stringify(FEATURE_NAMES)) {
           throw new Error('CDSS model feature order does not match the application feature specification.')
         }
