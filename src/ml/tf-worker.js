@@ -18,7 +18,9 @@ async function loadModel(modelId) {
     const loadPromise = (async () => {
       reportModelStatus(modelId, 'loading')
       try {
-        const metaResponse = await fetch(`/models/${modelId}/meta.json`)
+        const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '')
+        const modelAssetBase = new URL(`${baseUrl}/models/${modelId}/`, self.location.origin).toString()
+        const metaResponse = await fetch(`${modelAssetBase}meta.json`)
         if (!metaResponse.ok) {
           throw new Error(`Could not load ${modelId} metadata (${metaResponse.status}).`)
         }
@@ -41,7 +43,7 @@ async function loadModel(modelId) {
         }
 
         if (!model) {
-          model = await tf.loadLayersModel(`/models/${modelId}/model.json`)
+          model = await tf.loadLayersModel(`${modelAssetBase}model.json`)
           if (cacheUrl && typeof indexedDB !== 'undefined') {
             try {
               await model.save(cacheUrl)
