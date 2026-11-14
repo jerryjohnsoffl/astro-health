@@ -1,5 +1,7 @@
-const CACHE_NAME = 'astro-health-shell-v1'
-const APP_SHELL_URLS = ['/', '/manifest.webmanifest', '/astrohealth-icon.svg']
+// Base-aware: works at "/" in dev and at "/astro-health/" on GitHub Pages.
+const BASE = self.registration.scope // always ends with "/"
+const CACHE_NAME = 'astro-health-shell-v2'
+const APP_SHELL_URLS = [BASE, `${BASE}manifest.webmanifest`, `${BASE}astrohealth-icon.svg`]
 
 function cacheResponse(request, response) {
   if (!response.ok) {
@@ -17,7 +19,14 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => cache.addAll(APP_SHELL_URLS))
+      .then((cache) =>
+        // one missing file must not abort the whole install (cache.addAll is all-or-nothing)
+        Promise.all(
+          APP_SHELL_URLS.map((url) =>
+            cache.add(url).catch((error) => console.warn('Could not precache', url, error)),
+          ),
+        ),
+      )
       .then(() => self.skipWaiting()),
   )
 })
@@ -49,10 +58,10 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          return cacheResponse('/', response).then(() => response)
+          return cacheResponse(BASE, response).then(() => response)
         })
         .catch(async () => {
-          const cachedPage = await caches.match('/')
+          const cachedPage = await caches.match(BASE)
           if (cachedPage) {
             return cachedPage
           }
