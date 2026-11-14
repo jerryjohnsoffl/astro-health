@@ -1,0 +1,25 @@
+{
+  "classNames": [
+    "N",
+    "S",
+    "V",
+    "F",
+    "Q"
+  ],
+  "classDescriptions": {
+    "N": "Normal / bundle-branch beat",
+    "S": "Supraventricular ectopic",
+    "V": "Ventricular ectopic",
+    "F": "Fusion",
+    "Q": "Unknown / paced"
+  },
+  "sampleRate": 360,
+  "windowSamples": 180,
+  "preSamples": 90,
+  "postSamples": 90,
+  "normalization": "per-window z-score: (x - mean(x)) / std(x)",
+  "lead": "MLII",
+  "testAccuracyUnseenPatients": 0.8346211115135418,
+  "modelVersion": "1.0.0",
+  "syntheticData": false
+}

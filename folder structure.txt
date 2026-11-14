@@ -1,0 +1,82 @@
+astro-health/
+├── public/
+│   ├── manifest.json
+│   └── models/                    # TF.js model.json + shards
+│       └── cdss-mlp/
+├── scripts/
+│   ├── generate-synthetic-data.js # builds training set from rules
+│   └── train-cdss.py              # or train in-browser with tf.js
+├── src/
+│   ├── main.jsx
+│   ├── App.jsx
+│   ├── assets/
+│   │   └── body-map.svg           # your 55-path SVG
+│   ├── components/
+│   │   ├── layout/
+│   │   │   ├── HeaderBar.jsx          # crew ID, mission day, environment, offline badge
+│   │   │   ├── EmergencyButton.jsx    # always visible
+│   │   │   └── ModelStatusFooter.jsx
+│   │   ├── bodymap/
+│   │   │   ├── BodyMap.jsx            # renders SVG, binds status colors
+│   │   │   ├── RegionTooltip.jsx
+│   │   │   ├── LayerToggles.jsx       # skeletal / cardio / neuro / renal
+│   │   │   └── regionMap.js           # SVG id -> system(s) -> modules
+│   │   ├── detail/
+│   │   │   ├── DetailDrawer.jsx
+│   │   │   ├── MeasurementGuide.jsx   # how / why / what-if-abnormal
+│   │   │   ├── VitalsChart.jsx
+│   │   │   └── CountermeasureList.jsx
+│   │   ├── cdss/
+│   │   │   ├── SymptomChecker.jsx
+│   │   │   ├── DifferentialChart.jsx  # probability bars
+│   │   │   └── TriageResult.jsx
+│   │   ├── emergency/
+│   │   │   ├── EmergencyFlow.jsx      # decision-tree runner
+│   │   │   ├── CPRGuide.jsx           # microgravity-adapted steps
+│   │   │   └── ProtocolCard.jsx
+│   │   ├── wellbeing/
+│   │   │   ├── MoodLog.jsx
+│   │   │   ├── CognitiveTest.jsx      # 10-min PVT-style reaction test
+│   │   │   ├── Journal.jsx
+│   │   │   └── SleepChart.jsx
+│   │   ├── environment/
+│   │   │   ├── RadiationTracker.jsx
+│   │   │   └── CabinAirPanel.jsx
+│   │   └── reminders/
+│   │       ├── ReminderCenter.jsx
+│   │       └── ReminderToast.jsx
+│   ├── data/                          # all clinical content lives here, not in components
+│   │   ├── measurements.js            # definitions + normal ranges + guidance text
+│   │   ├── conditions.js              # SANS, hypoxia, DCS, SMS, kidney stones...
+│   │   ├── emergencyProtocols.js      # decision trees as JSON
+│   │   ├── environments.js            # spacecraft / ISS / lunar base profiles
+│   │   └── sources.js                 # NASA HRP citations per item
+│   ├── engine/
+│   │   ├── rules.js                   # deterministic safety rules
+│   │   ├── triage.js                  # combines rules + ML output
+│   │   ├── thresholds.js
+│   │   └── reminders.js               # scheduling logic
+│   ├── ml/
+│   │   ├── tf-worker.js               # Web Worker, loads models, runs inference
+│   │   ├── workerApi.js               # Comlink wrapper
+│   │   ├── features.js                # symptom list -> tensor encoding
+│   │   ├── cdssModel.js
+│   │   └── anomaly.js                 # stretch: 1D-CNN autoencoder
+│   ├── store/
+│   │   ├── useHealthStore.js          # Zustand: region status, selectedRegion, symptoms
+│   │   ├── useSettingsStore.js        # environment, units, crew profile
+│   │   └── persist.js                 # Dexie / IndexedDB
+│   ├── sim/
+│   │   ├── vitalsSimulator.js         # fake wearable stream for demo
+│   │   └── scenarios.js               # "halfway to Mars chest pain", "EVA hypoxia"
+│   ├── hooks/
+│   │   ├── useCDSSInference.js
+│   │   ├── useReminders.js
+│   │   └── useOnlineStatus.js
+│   ├── types/index.js
+│   └── styles/
+├── tests/
+│   ├── rules.test.js                  # emergency rules must have tests
+│   └── triage.test.js
+├── vite.config.js                     # + vite-plugin-pwa
+└── package.json

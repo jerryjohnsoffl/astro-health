@@ -1,0 +1,14 @@
+﻿"Treat each feature as a module that owns its components, data and logic, with a small public interface so teammates don’t edit each other’s files. There are 8 modules, plus a shared core.",,,
+,,,
+Module,What it owns,Depends on,Public interface
+1. Core shell,"main, App, layout/*, styles/, useSettingsStore, persist, useOnlineStatus, PWA config",nothing,"layout slots, settings (environment, units, crew profile), persist"
+2. Content,"data/* (measurements, conditions, emergency protocols, environments, sources)",nothing,"plain exported objects, no logic"
+3. Safety engine,"engine/rules, thresholds, triage, tests/",Content,"checkMeasurement(), checkSymptoms(), triage()"
+4. Health state,useHealthStore,"Safety engine, Core (persist)","recordMeasurement(), setSymptoms(), region statuses"
+5. Body map and detail,"bodymap/*, detail/*","Health state, Content","<BodyMap>, <DetailDrawer>"
+6. CDSS (ML),"ml/*, cdss/*, useCDSSInference, scripts/, public/models","Safety engine, Health state","runDiagnosis(symptoms, context)"
+7. Emergency,emergency/*,Content only,"<EmergencyButton>, <EmergencyFlow>"
+"8. Wellbeing, environment, reminders","wellbeing/*, environment/*, reminders/*, engine/reminders, useReminders","Content, Health state",one panel component each
+Support: Simulation,sim/*,calls recordMeasurement() only,startScenario(name)
+,,,
+,,,
