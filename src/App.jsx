@@ -9,6 +9,7 @@ import {
   Leaf,
   Menu,
   MoonStar,
+  Ruler,
   Settings,
   ShieldAlert,
   Smile,
@@ -23,7 +24,10 @@ import DetailDrawer from './components/detail/DetailDrawer'
 import EmergencyFlow from './components/emergency/EmergencyFlow'
 import EmergencyButton from './components/layout/EmergencyButton'
 import ModelWorkbench from './components/ml/ModelWorkbench'
+import ManualWellbeingCheckin from './components/wellbeing/ManualWellbeingCheckin'
 import astrohealthIcon from './assets/astrohealth-icon.svg'
+import { environments } from './data/environments.js'
+import { useSettingsStore } from './store/useSettingsStore.js'
 
 const navItems = [
   { id: 'overview', label: 'Overview', icon: Home },
@@ -95,7 +99,7 @@ function OverviewSection({ navigate }) {
         <SectionLink
           icon={MoonStar}
           title="Review wellbeing"
-          description="Classify a sleep sensor window and view sleep-stage guidance."
+          description="Complete a quick self-report or import a wearable sleep file."
           onClick={() => navigate('wellbeing')}
         />
       </div>
@@ -190,15 +194,12 @@ function WellbeingSection() {
         id="wellbeing-title"
         eyebrow="Wellbeing"
         title="Sleep and recovery"
-        description="Classify a sleep sensor window on-device. Each result applies to the submitted window, not a full-night sleep assessment."
+        description="Choose a quick self-report or analyze a compatible wearable/PSG export. Self-reported answers are not converted into sensor signals or sent to the sleep model."
       />
-      <section className={`${panelClasses} mb-5`} aria-labelledby="sleep-model-note">
-        <h2 id="sleep-model-note" className="text-lg font-semibold text-white">Sleep-stage timeline</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-300">
-          A timeline can be shown once sequential windows are recorded. The current model form classifies one 3,000 × 7 window at a time; it does not retain or infer a night-long timeline.
-        </p>
-      </section>
-      <ModelWorkbench models={['sleep']} title="Sleep-stage classification" />
+      <div className="grid items-start gap-5 xl:grid-cols-2">
+        <ManualWellbeingCheckin />
+        <ModelWorkbench models={['sleep']} title="Wearable sleep-stage analysis" />
+      </div>
     </section>
   )
 }
@@ -243,6 +244,222 @@ function EmergencySection() {
   )
 }
 
+function SettingsSection() {
+  const { settings, updateSettings, resetSettings } = useSettingsStore()
+  const [draft, setDraft] = useState(settings)
+  const [saveMessage, setSaveMessage] = useState('')
+  const [saveError, setSaveError] = useState('')
+  const selectedEnvironment = environments.find(({ id }) => id === draft.environment)
+
+  function updateDraft(updates) {
+    setDraft((current) => ({ ...current, ...updates }))
+    setSaveMessage('')
+    setSaveError('')
+  }
+
+  function handleSubmit(event) {
+    event.preventDefault()
+    setSaveMessage('')
+    setSaveError('')
+
+    try {
+      updateSettings(draft)
+      setSaveMessage('Settings saved on this device.')
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  function handleReset() {
+    setSaveMessage('')
+    setSaveError('')
+
+    try {
+      setDraft(resetSettings())
+      setSaveMessage('Settings restored to defaults.')
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  return (
+    <section aria-labelledby="settings-title">
+      <PageHeading
+        id="settings-title"
+        eyebrow="Preferences"
+        title="Settings"
+        description="Set your mission context, measurement units, and crew profile. Profile details and preferences are saved locally in this browser and can be changed anytime."
+      />
+      <form onSubmit={handleSubmit} className={`${panelClasses} space-y-6`}>
+        <fieldset className="space-y-4">
+          <legend className="text-lg font-semibold text-white">Mission context</legend>
+          <label className="block space-y-2 text-sm text-slate-200">
+            <span>Environment</span>
+            <select
+              value={draft.environment}
+              onChange={(event) => updateDraft({ environment: event.target.value })}
+              className="w-full rounded-xl border border-sky-500/20 bg-slate-950 px-3 py-2.5 text-white outline-none focus:border-sky-300/60 sm:max-w-xl"
+            >
+              {environments.map(({ id, name }) => (
+                <option key={id} value={id}>{name}</option>
+              ))}
+            </select>
+          </label>
+          {selectedEnvironment && (
+            <div className="rounded-xl border border-sky-500/10 bg-slate-950/50 p-4 text-sm">
+              <p className="text-slate-200">{selectedEnvironment.missionContext}</p>
+              <p className="mt-2 text-xs leading-5 text-slate-400">
+                Operational limits are not configured from the available research summaries.
+              </p>
+            </div>
+          )}
+        </fieldset>
+
+        <fieldset className="space-y-4">
+          <legend className="text-lg font-semibold text-white">Display preferences</legend>
+          <label className="block space-y-2 text-sm text-slate-200 sm:max-w-xl">
+            <span>Measurement units</span>
+            <select
+              value={draft.units}
+              onChange={(event) => updateDraft({ units: event.target.value })}
+              className="w-full rounded-xl border border-sky-500/20 bg-slate-950 px-3 py-2.5 text-white outline-none focus:border-sky-300/60"
+            >
+              <option value="metric">Metric</option>
+              <option value="imperial">Imperial</option>
+            </select>
+          </label>
+        </fieldset>
+
+        <fieldset className="space-y-4">
+          <legend className="text-lg font-semibold text-white">Crew profile</legend>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="space-y-2 text-sm text-slate-200">
+              <span>Crew ID</span>
+              <input
+                type="text"
+                autoComplete="off"
+                value={draft.crewProfile.crewId}
+                onChange={(event) =>
+                  updateDraft({
+                    crewProfile: { ...draft.crewProfile, crewId: event.target.value },
+                  })
+                }
+                className="w-full rounded-xl border border-sky-500/20 bg-slate-950 px-3 py-2.5 text-white outline-none focus:border-sky-300/60"
+              />
+            </label>
+            <label className="space-y-2 text-sm text-slate-200">
+              <span>Display name</span>
+              <input
+                type="text"
+                autoComplete="name"
+                value={draft.crewProfile.displayName}
+                onChange={(event) =>
+                  updateDraft({
+                    crewProfile: { ...draft.crewProfile, displayName: event.target.value },
+                  })
+                }
+                className="w-full rounded-xl border border-sky-500/20 bg-slate-950 px-3 py-2.5 text-white outline-none focus:border-sky-300/60"
+              />
+            </label>
+          </div>
+        </fieldset>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="submit"
+            className="rounded-xl border border-sky-300/30 bg-sky-500/15 px-4 py-2.5 text-sm font-medium text-sky-100 hover:bg-sky-500/25"
+          >
+            Save settings
+          </button>
+          <button
+            type="button"
+            onClick={handleReset}
+            className="rounded-xl border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-800"
+          >
+            Restore defaults
+          </button>
+          {saveMessage && <p className="text-sm text-emerald-200" role="status">{saveMessage}</p>}
+          {saveError && <p className="text-sm text-rose-300" role="alert">{saveError}</p>}
+        </div>
+      </form>
+    </section>
+  )
+}
+
+function FirstUseProfileDialog() {
+  const { settings, completeProfileSetup } = useSettingsStore()
+  const [crewProfile, setCrewProfile] = useState(settings.crewProfile)
+  const [saveError, setSaveError] = useState('')
+
+  function handleSubmit(event) {
+    event.preventDefault()
+    setSaveError('')
+    try {
+      completeProfileSetup(crewProfile)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="first-use-title"
+        aria-describedby="first-use-description"
+        className="w-full max-w-md rounded-3xl border border-sky-400/25 bg-slate-900 p-5 shadow-2xl sm:p-6"
+      >
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-sky-300/80">First-time setup</p>
+        <h2 id="first-use-title" className="mt-2 text-xl font-semibold text-white">
+          Set up your crew profile
+        </h2>
+        <p id="first-use-description" className="mt-2 text-sm leading-6 text-slate-300">
+          Enter your name to continue. A crew ID is optional. You can update these details anytime in Settings.
+        </p>
+        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+          <label className="block space-y-2 text-sm text-slate-200">
+            <span>Display name</span>
+            <input
+              type="text"
+              autoComplete="name"
+              autoFocus
+              required
+              value={crewProfile.displayName}
+              onChange={(event) =>
+                setCrewProfile((current) => ({ ...current, displayName: event.target.value }))
+              }
+              className="w-full rounded-xl border border-sky-500/20 bg-slate-950 px-3 py-2.5 text-white outline-none focus:border-sky-300/60"
+            />
+          </label>
+          <label className="block space-y-2 text-sm text-slate-200">
+            <span>Crew ID <span className="text-slate-500">(optional)</span></span>
+            <input
+              type="text"
+              autoComplete="off"
+              value={crewProfile.crewId}
+              onChange={(event) =>
+                setCrewProfile((current) => ({ ...current, crewId: event.target.value }))
+              }
+              className="w-full rounded-xl border border-sky-500/20 bg-slate-950 px-3 py-2.5 text-white outline-none focus:border-sky-300/60"
+            />
+          </label>
+          {saveError && <p className="text-sm text-rose-300" role="alert">{saveError}</p>}
+          <p className="text-xs leading-5 text-slate-400">
+            Profile details and health entries stay in this browser’s local storage; they are not sent to a server.
+          </p>
+          <button
+            type="submit"
+            className="w-full rounded-xl border border-sky-300/30 bg-sky-500/15 px-4 py-2.5 text-sm font-medium text-sky-100 hover:bg-sky-500/25"
+          >
+            Save profile and continue
+          </button>
+        </form>
+      </section>
+    </div>
+  )
+}
+
 function ComingSoonSection({ title }) {
   return (
     <section aria-labelledby="section-title">
@@ -264,6 +481,9 @@ function ComingSoonSection({ title }) {
 function App() {
   const [activeSection, setActiveSection] = useState('overview')
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const { settings } = useSettingsStore()
+  const environmentName =
+    environments.find(({ id }) => id === settings.environment)?.name ?? settings.environment
 
   function navigate(section) {
     setActiveSection(section)
@@ -286,7 +506,7 @@ function App() {
       case 'reminders':
         return <ComingSoonSection title="Reminders" />
       case 'settings':
-        return <ComingSoonSection title="Settings" />
+        return <SettingsSection key={settings.profileSetupComplete ? 'profile-complete' : 'profile-needed'} />
       case 'overview':
       default:
         return <OverviewSection navigate={navigate} />
@@ -316,15 +536,19 @@ function App() {
             <div className="hidden items-center gap-3 md:flex">
               <div className="flex items-center gap-2 rounded-xl border border-sky-500/15 bg-sky-500/5 px-3 py-2 text-sm text-sky-100/80">
                 <BrainCircuit size={15} />
-                <span>Crew ID: A-742</span>
+                <span>Crew ID: {settings.crewProfile.crewId || 'Not set'}</span>
               </div>
               <div className="flex items-center gap-2 rounded-xl border border-sky-500/15 bg-sky-500/5 px-3 py-2 text-sm text-sky-100/80">
                 <CloudSun size={15} />
                 <span>Mission Day 128</span>
               </div>
               <div className="flex items-center gap-2 rounded-xl border border-sky-500/15 bg-sky-500/5 px-3 py-2 text-sm text-sky-100/80">
-                <MoonStar size={15} />
-                <span>Trans Suit</span>
+                <Leaf size={15} />
+                <span>{environmentName}</span>
+              </div>
+              <div className="flex items-center gap-2 rounded-xl border border-sky-500/15 bg-sky-500/5 px-3 py-2 text-sm text-sky-100/80">
+                <Ruler size={15} />
+                <span>{settings.units === 'metric' ? 'Metric units' : 'Imperial units'}</span>
               </div>
             </div>
             <button
@@ -400,6 +624,7 @@ function App() {
         </div>
       </div>
       <EmergencyButton onClick={() => navigate('emergency')} />
+      {!settings.profileSetupComplete && <FirstUseProfileDialog />}
     </AppShell>
   )
 }

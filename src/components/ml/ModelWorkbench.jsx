@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { CONTEXT, SYMPTOMS } from '../../ml/features.js'
-import { parseEcgCsv, parseSleepCsv } from '../../ml/preprocessing.js'
+import { normalizeEcgWindow, parseEcgCsvSamples, parseSleepCsv } from '../../ml/preprocessing.js'
 import { predictECG, predictSleep } from '../../ml/workerApi.js'
 import { useCDSSInference } from '../../hooks/useCDSSInference.js'
+import { saveCDSSAssessment, saveSensorAnalysis, useHealthStore } from '../../store/useHealthStore.js'
 
 const modelTabs = [
   { id: 'cdss', label: 'Differential support' },
@@ -83,11 +84,37 @@ export default function ModelWorkbench({
   title = 'Model workbench',
 }) {
   const [activeModel, setActiveModel] = useState(models[0] ?? 'cdss')
-  const [symptoms, setSymptoms] = useState(() => Object.fromEntries(SYMPTOMS.map((name) => [name, 0])))
-  const [context, setContext] = useState(() => Object.fromEntries(CONTEXT.map(({ name }) => [name, ''])))
-  const [ecgText, setEcgText] = useState('')
-  const [sleepText, setSleepText] = useState('')
-  const [sensorPredictions, setSensorPredictions] = useState(null)
+  const { healthState } = useHealthStore()
+  const savedCDSSAssessment = healthState.cdssAssessment
+  const savedEcgAnalysis = healthState.sensorAnalyses.ecg
+  const savedSleepAnalysis = healthState.sensorAnalyses.sleep
+  const [symptoms, setSymptoms] = useState(() =>
+    Object.fromEntries(
+      SYMPTOMS.map((name) => [name, savedCDSSAssessment?.input.symptoms[name] ?? 0]),
+    ),
+  )
+  const [context, setContext] = useState(() =>
+    Object.fromEntries(
+      CONTEXT.map(({ name }) => [
+        name,
+        savedCDSSAssessment ? String(savedCDSSAssessment.input.context[name] ?? '') : '',
+      ]),
+    ),
+  )
+  const [ecgRawSamples, setEcgRawSamples] = useState(savedEcgAnalysis?.samples ?? null)
+  const [ecgSamples, setEcgSamples] = useState(() =>
+    savedEcgAnalysis ? normalizeEcgWindow(savedEcgAnalysis.samples) : null,
+  )
+  const [ecgFileName, setEcgFileName] = useState(savedEcgAnalysis?.fileName ?? '')
+  const [ecgSaved, setEcgSaved] = useState(Boolean(savedEcgAnalysis))
+  const [sleepSamples, setSleepSamples] = useState(savedSleepAnalysis?.samples ?? null)
+  const [sleepFileName, setSleepFileName] = useState(savedSleepAnalysis?.fileName ?? '')
+  const [sleepSaved, setSleepSaved] = useState(Boolean(savedSleepAnalysis))
+  const [sensorPredictions, setSensorPredictions] = useState(() =>
+    activeModel === 'ecg'
+      ? savedEcgAnalysis?.predictions ?? null
+      : savedSleepAnalysis?.predictions ?? null,
+  )
   const [sensorError, setSensorError] = useState(null)
   const [sensorLoading, setSensorLoading] = useState(false)
   const [formError, setFormError] = useState(null)
@@ -104,22 +131,123 @@ export default function ModelWorkbench({
       return
     }
 
-    await runDiagnosis({
+    const record = {
       symptoms,
       context: Object.fromEntries(CONTEXT.map(({ name }) => [name, Number(context[name])])),
-    })
+    }
+
+    try {
+      saveCDSSAssessment(record)
+      setFormError(null)
+    } catch (error) {
+      setFormError(`CDSS input could not be saved locally: ${error.message}`)
+    }
+
+    const predictions = await runDiagnosis(record)
+    if (predictions) {
+      try {
+        saveCDSSAssessment(record, predictions)
+        setFormError(null)
+      } catch (error) {
+        setFormError(`The result ran, but could not be saved locally: ${error.message}`)
+      }
+    }
+  }
+
+  async function handleSleepFileChange(event) {
+    const file = event.target.files?.[0]
+    setSleepSamples(null)
+    setSleepFileName(file?.name ?? '')
+    setSleepSaved(false)
+    setSensorError(null)
+    setSensorPredictions(null)
+
+    if (!file) {
+      return
+    }
+
+    try {
+      const samples = parseSleepCsv(await file.text())
+      setSleepSamples(samples)
+      try {
+        saveSensorAnalysis('sleep', file.name, samples)
+        setSleepSaved(true)
+      } catch (error) {
+        setSensorError(`File loaded, but could not be saved locally: ${error.message}`)
+      }
+    } catch (error) {
+      setSensorError(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  async function handleEcgFileChange(event) {
+    const file = event.target.files?.[0]
+    setEcgSamples(null)
+    setEcgRawSamples(null)
+    setEcgFileName(file?.name ?? '')
+    setEcgSaved(false)
+    setSensorError(null)
+    setSensorPredictions(null)
+
+    if (!file) {
+      return
+    }
+
+    try {
+      const rawSamples = parseEcgCsvSamples(await file.text())
+      const samples = normalizeEcgWindow(rawSamples)
+      setEcgRawSamples(rawSamples)
+      setEcgSamples(samples)
+      try {
+        saveSensorAnalysis('ecg', file.name, rawSamples)
+        setEcgSaved(true)
+      } catch (error) {
+        setSensorError(`File loaded, but could not be saved locally: ${error.message}`)
+      }
+    } catch (error) {
+      setSensorError(error instanceof Error ? error.message : String(error))
+    }
   }
 
   async function submitSensorModel(event) {
     event.preventDefault()
     setSensorError(null)
     setSensorPredictions(null)
+    if (activeModel === 'sleep' && !sleepSamples) {
+      setSensorError('Choose a valid sleep CSV file before classifying.')
+      return
+    }
+    if (activeModel === 'ecg' && !ecgSamples) {
+      setSensorError('Choose a valid ECG CSV file before classifying.')
+      return
+    }
+
     setSensorLoading(true)
     try {
       const result = activeModel === 'ecg'
-        ? await predictECG(parseEcgCsv(ecgText))
-        : await predictSleep(parseSleepCsv(sleepText))
+        ? await predictECG(ecgSamples)
+        : await predictSleep(sleepSamples)
       setSensorPredictions(result)
+      try {
+        saveSensorAnalysis(
+          activeModel,
+          activeModel === 'ecg' ? ecgFileName : sleepFileName,
+          activeModel === 'ecg' ? ecgRawSamples : sleepSamples,
+          result,
+        )
+        if (activeModel === 'ecg') {
+          setEcgSaved(true)
+        } else {
+          setSleepSaved(true)
+        }
+      } catch (error) {
+        if (activeModel === 'ecg') {
+          setEcgSaved(false)
+        } else {
+          setSleepSaved(false)
+        }
+        setSensorError(`The result ran, but could not be saved locally: ${error.message}`)
+      }
     } catch (error) {
       setSensorError(error.message)
     } finally {
@@ -151,7 +279,7 @@ export default function ModelWorkbench({
               onClick={() => {
                 setActiveModel(id)
                 setSensorError(null)
-                setSensorPredictions(null)
+                setSensorPredictions(healthState.sensorAnalyses[id]?.predictions ?? null)
               }}
               className={`rounded-full border px-4 py-2 text-sm transition ${
                 activeModel === id
@@ -229,7 +357,7 @@ export default function ModelWorkbench({
           </form>
 
           {(formError || cdssError) && <p className="mt-3 text-sm text-rose-300" role="alert">{formError ?? cdssError}</p>}
-          <PredictionList predictions={cdssPredictions} />
+          <PredictionList predictions={cdssPredictions ?? savedCDSSAssessment?.predictions} />
         </div>
       ) : (
         <div
@@ -238,24 +366,51 @@ export default function ModelWorkbench({
           aria-labelledby={visibleTabs.length > 1 ? `model-tab-${activeModel}` : undefined}
         >
           <form onSubmit={submitSensorModel} className="space-y-3">
-            <label htmlFor={`${activeModel}-window`} className="block text-sm font-medium text-sky-100">
-              {activeModel === 'ecg'
-                ? 'Paste one MLII ECG beat as 180 comma- or whitespace-separated samples (360 Hz).'
-                : 'Paste one sleep window as 3000 CSV rows with 7 numeric columns per row; no header.'}
-            </label>
-            <textarea
-              id={`${activeModel}-window`}
-              required
-              rows={activeModel === 'ecg' ? 5 : 8}
-              value={activeModel === 'ecg' ? ecgText : sleepText}
-              onChange={(event) => activeModel === 'ecg' ? setEcgText(event.target.value) : setSleepText(event.target.value)}
-              placeholder={activeModel === 'ecg' ? 'sample 1, sample 2, …' : 'feature 1, feature 2, … (one row per sample)'}
-              className="w-full rounded-xl border border-sky-500/20 bg-slate-950 px-3 py-2 font-mono text-xs text-white outline-none focus:border-sky-300/60"
-            />
             {activeModel === 'sleep' && (
-              <p className="text-xs text-slate-500">
-                The model expects 7 features per sample. Confirm the feature order against your sensor export; this bundle does not provide feature names.
-              </p>
+              <div className="space-y-2">
+                <label htmlFor="sleep-window" className="block text-sm font-medium text-sky-100">
+                  Choose one 30-second PSG epoch as a numeric CSV file.
+                </label>
+                <input
+                  id="sleep-window"
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={handleSleepFileChange}
+                  className="block w-full rounded-xl border border-sky-500/20 bg-slate-950 px-3 py-2 text-sm text-slate-200 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-500/15 file:px-3 file:py-2 file:text-sky-100"
+                />
+                {sleepFileName && sleepSamples && (
+                  <p className="text-sm text-emerald-200" role="status">
+                    {sleepFileName} prepared as 3,000 samples × 7 channels
+                    {sleepSaved ? ' and saved locally.' : '; not saved locally.'}
+                  </p>
+                )}
+                <p className="text-xs leading-5 text-slate-400">
+                  The importer accepts 3,000 × 7 or 7 × 3,000 numeric CSVs and transposes the latter. It does not resample, normalize, or identify channels. Use only a file prepared with the model’s matching channel order and preprocessing; this bundle does not document those details. The file is read locally in your browser.
+                </p>
+              </div>
+            )}
+            {activeModel === 'ecg' && (
+              <div className="space-y-2">
+                <label htmlFor="ecg-window" className="block text-sm font-medium text-sky-100">
+                  Choose one MLII ECG beat as a numeric CSV file.
+                </label>
+                <input
+                  id="ecg-window"
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={handleEcgFileChange}
+                  className="block w-full rounded-xl border border-sky-500/20 bg-slate-950 px-3 py-2 text-sm text-slate-200 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-500/15 file:px-3 file:py-2 file:text-sky-100"
+                />
+                {ecgFileName && ecgSamples && (
+                  <p className="text-sm text-emerald-200" role="status">
+                    {ecgFileName} prepared as one 180-sample beat
+                    {ecgSaved ? ' and saved locally.' : '; not saved locally.'}
+                  </p>
+                )}
+                <p className="text-xs leading-5 text-slate-400">
+                  The file must contain exactly 180 numeric samples from one MLII lead at 360 Hz, centered on one beat, with no header or timestamp column. A single row or single column is accepted. The importer applies the model’s per-window z-score normalization; it does not resample or identify leads. The file is read locally in your browser.
+                </p>
+              </div>
             )}
             <button
               type="submit"

@@ -1,1 +1,64 @@
-export {}
+export const environments = [
+  {
+    id: 'iss',
+    name: 'International Space Station',
+    missionContext: 'Low-Earth-orbit habitat and research setting.',
+    hazards: [
+      'gravity-fields',
+      'hostile-closed-environments',
+      'space-radiation',
+      'isolation-and-confinement',
+    ],
+    monitoringDomains: [
+      'cabin atmosphere and habitat conditions',
+      'radiation exposure',
+      'physiological and behavioral research measures',
+      'microbial and immune-system research',
+    ],
+    operationalLimits: [],
+    limitsStatus: 'not-specified-by-these-research-summaries',
+    sourceIds: ['nasa-hrp-hazards', 'nasa-hrp-risks', 'nasa-ongoing-research'],
+  },
+  {
+    id: 'lunar-base',
+    name: 'Lunar surface habitat',
+    missionContext: 'Surface exploration with a gravity environment different from Earth.',
+    hazards: [
+      'space-radiation',
+      'gravity-fields',
+      'distance-from-earth',
+      'hostile-closed-environments',
+      'isolation-and-confinement',
+    ],
+    monitoringDomains: [
+      'radiation exposure',
+      'habitat temperature, pressure, lighting, and noise',
+      'microbial and immune-system research',
+      'physiological adaptation to gravity transitions',
+    ],
+    operationalLimits: [],
+    limitsStatus: 'not-specified-by-these-research-summaries',
+    sourceIds: ['nasa-hrp-hazards', 'nasa-hrp-risks', 'nasa-closed-environments'],
+  },
+  {
+    id: 'mars-transit',
+    name: 'Mars transit',
+    missionContext: 'Long-duration deep-space mission with delayed support from Earth.',
+    hazards: [
+      'space-radiation',
+      'gravity-fields',
+      'distance-from-earth',
+      'hostile-closed-environments',
+      'isolation-and-confinement',
+    ],
+    monitoringDomains: [
+      'radiation exposure',
+      'habitat temperature, pressure, lighting, and noise',
+      'physiological and behavioral research measures',
+      'crew health and performance',
+    ],
+    operationalLimits: [],
+    limitsStatus: 'NASA reports insufficient knowledge to recommend crew exposure limits for long-duration missions.',
+    sourceIds: ['nasa-hrp-hazards', 'nasa-hrp-risks', 'nasa-radiation-monitoring'],
+  },
+]

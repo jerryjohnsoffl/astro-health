@@ -9,6 +9,7 @@ const DEFAULT_SETTINGS = Object.freeze({
     crewId: '',
     displayName: '',
   }),
+  profileSetupComplete: false,
 })
 
 function isRecord(value) {
@@ -41,6 +42,12 @@ function normalizeSettings(value) {
   ) {
     throw new TypeError('Crew ID and display name must be strings.')
   }
+  if (
+    candidate.profileSetupComplete !== undefined &&
+    typeof candidate.profileSetupComplete !== 'boolean'
+  ) {
+    throw new TypeError('Profile setup status must be a boolean.')
+  }
 
   return {
     environment: candidate.environment.trim(),
@@ -50,6 +57,9 @@ function normalizeSettings(value) {
       crewId: crewProfile.crewId ?? DEFAULT_SETTINGS.crewProfile.crewId,
       displayName: crewProfile.displayName ?? DEFAULT_SETTINGS.crewProfile.displayName,
     },
+    profileSetupComplete:
+      candidate.profileSetupComplete ??
+      Boolean(crewProfile.crewId?.trim() || crewProfile.displayName?.trim()),
   }
 }
 
@@ -127,6 +137,23 @@ export function setCrewProfile(crewProfile) {
   return updateSettings({ crewProfile })
 }
 
+export function completeProfileSetup(crewProfile) {
+  if (!isRecord(crewProfile)) {
+    throw new TypeError('Crew profile must be an object.')
+  }
+  if (typeof crewProfile.displayName !== 'string' || crewProfile.displayName.trim() === '') {
+    throw new TypeError('Display name must not be empty.')
+  }
+  return updateSettings({
+    crewProfile: {
+      ...crewProfile,
+      displayName: crewProfile.displayName.trim(),
+      crewId: typeof crewProfile.crewId === 'string' ? crewProfile.crewId.trim() : '',
+    },
+    profileSetupComplete: true,
+  })
+}
+
 export function resetSettings() {
   return commitSettings(DEFAULT_SETTINGS)
 }
@@ -139,6 +166,7 @@ export function useSettingsStore() {
     setEnvironment,
     setUnits,
     setCrewProfile,
+    completeProfileSetup,
     updateSettings,
     resetSettings,
   }

@@ -78,9 +78,9 @@ export function validateSleepWindow(samples) {
   return samples
 }
 
-export function parseEcgCsv(text) {
+export function parseEcgCsvSamples(text) {
   if (typeof text !== 'string' || text.trim() === '') {
-    throw new TypeError('Paste an ECG window as 180 comma- or whitespace-separated samples.')
+    throw new TypeError('Choose an ECG CSV containing exactly 180 numeric samples.')
   }
   const tokens = text.trim().split(/[,\s]+/)
   const samples = tokens.map((token, index) => {
@@ -90,18 +90,23 @@ export function parseEcgCsv(text) {
     }
     return value
   })
-  return normalizeEcgWindow(samples)
+  assertFiniteVector(samples, 'ECG window', 180)
+  return samples
+}
+
+export function parseEcgCsv(text) {
+  return normalizeEcgWindow(parseEcgCsvSamples(text))
 }
 
 export function parseSleepCsv(text) {
   if (typeof text !== 'string' || text.trim() === '') {
-    throw new TypeError('Paste a sleep window as 3000 CSV rows with 7 values per row.')
+    throw new TypeError('Choose a sleep CSV containing one 7-channel, 3000-sample epoch.')
   }
 
-  const samples = text.trim().split(/\r?\n/).map((line, rowIndex) => {
+  const rows = text.trim().split(/\r?\n/).map((line, rowIndex) => {
     const tokens = line.trim().split(/[,\s]+/)
-    if (tokens.length !== 7) {
-      throw new TypeError(`Sleep row ${rowIndex + 1} must contain exactly 7 comma-separated values.`)
+    if (tokens.length !== 7 && tokens.length !== 3000) {
+      throw new TypeError(`Sleep row ${rowIndex + 1} must contain 7 or 3000 values.`)
     }
     return tokens.map((token, columnIndex) => {
       const value = Number(token)
@@ -112,5 +117,19 @@ export function parseSleepCsv(text) {
     })
   })
 
-  return validateSleepWindow(samples)
+  if (rows.length === 7 && rows.every((row) => row.length === 3000)) {
+    return validateSleepWindow(
+      Array.from({ length: 3000 }, (_, sampleIndex) =>
+        rows.map((channel) => channel[sampleIndex]),
+      ),
+    )
+  }
+
+  if (rows.length !== 3000 || rows.some((row) => row.length !== 7)) {
+    throw new TypeError(
+      'Sleep CSV must contain one epoch as either 3000 samples × 7 channels or 7 channels × 3000 samples.',
+    )
+  }
+
+  return validateSleepWindow(rows)
 }
