@@ -20,6 +20,8 @@ import { useState } from 'react'
 import AppShell from './core/AppShell'
 import BodyMap from './components/bodymap/BodyMap'
 import DetailDrawer from './components/detail/DetailDrawer'
+import EmergencyFlow from './components/emergency/EmergencyFlow'
+import EmergencyButton from './components/layout/EmergencyButton'
 import ModelWorkbench from './components/ml/ModelWorkbench'
 import astrohealthIcon from './assets/astrohealth-icon.svg'
 
@@ -227,6 +229,20 @@ function EnvironmentSection() {
   )
 }
 
+function EmergencySection() {
+  return (
+    <section aria-labelledby="emergency-title">
+      <PageHeading
+        id="emergency-title"
+        eyebrow="Emergency response"
+        title="Crew emergency guides"
+        description="Use mission-approved procedures and contact flight medical support or mission control for real-time guidance."
+      />
+      <EmergencyFlow />
+    </section>
+  )
+}
+
 function ComingSoonSection({ title }) {
   return (
     <section aria-labelledby="section-title">
@@ -266,7 +282,7 @@ function App() {
       case 'environment':
         return <EnvironmentSection />
       case 'emergency':
-        return <ComingSoonSection title="Emergency" />
+        return <EmergencySection />
       case 'reminders':
         return <ComingSoonSection title="Reminders" />
       case 'settings':
@@ -383,6 +399,7 @@ function App() {
           </div>
         </div>
       </div>
+      <EmergencyButton onClick={() => navigate('emergency')} />
     </AppShell>
   )
 }
