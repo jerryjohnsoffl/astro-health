@@ -1,4 +1,4 @@
-﻿"Treat each feature as a module that owns its components, data and logic, with a small public interface so teammates don’t edit each other’s files. There are 8 modules, plus a shared core.",,,
+﻿"Treat each feature as a module that owns its components, data and logic, with a small public interface so teammates don’t edit each other’s files. There are 8 modules, plus a shared core; the remainder row maps unlisted repository files to their existing owners.",,,
 ,,,
 Module,What it owns,Depends on,Public interface
 1. Core shell,"main, App, layout/*, styles/, useSettingsStore, persist, useOnlineStatus, PWA config",nothing,"layout slots, settings (environment, units, crew profile), persist"
@@ -10,5 +10,6 @@ Module,What it owns,Depends on,Public interface
 7. Emergency,emergency/*,Content only,"<EmergencyButton>, <EmergencyFlow>"
 "8. Wellbeing, environment, reminders","wellbeing/*, environment/*, reminders/*, engine/reminders, useReminders","Content, Health state",one panel component each
 Support: Simulation,sim/*,calls recordMeasurement() only,startScenario(name)
+Remainder (files assigned to existing modules),"engine/index.js → Safety engine; core/AppShell.jsx and types/index.js → Core shell; components/ml/ModelWorkbench.jsx → CDSS (ML); assets/* → Body map and detail","Dependencies remain those of the owning module above","engine/index.js exports checkMeasurement(), checkSymptoms(), triage(); <AppShell>; <ModelWorkbench>; body/system assets; types/index.js is currently empty"
 ,,,
 ,,,
