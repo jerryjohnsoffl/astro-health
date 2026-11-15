@@ -1,4 +1,22 @@
-# React + Vite
+# AstroHealth
+
+## Anatomy annotations
+
+Run the development server and append `anatomy-editor` to Vite's displayed local
+URL to draw front/back region and structure polygons over the existing SVG
+layers. The editor saves a draft
+locally and exports a validated `anatomy-catalogue.json`. Review all anatomy
+against a trusted reference before adding the exported polygons to the health
+map. To make approved annotations available in the app, replace
+`src/anatomy/catalogue.json` with the exported file and restart Vite. The
+supplied artwork groups systems, but does not identify individual bones or
+organs.
+
+The point classifier and catalogue validation live in `src/anatomy/` and are
+covered by `npm test`.
+
+
+## React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 

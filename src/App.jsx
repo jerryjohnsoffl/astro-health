@@ -20,6 +20,7 @@ import {
 import { useState } from 'react'
 import AppShell from './core/AppShell'
 import BodyMap from './components/bodymap/BodyMap'
+import AnatomyEditor from './components/bodymap/AnatomyEditor'
 import DetailDrawer from './components/detail/DetailDrawer'
 import EmergencyFlow from './components/emergency/EmergencyFlow'
 import EmergencyButton from './components/layout/EmergencyButton'
@@ -169,6 +170,10 @@ function SelfCheckSection() {
 }
 
 function HealthMapSection({ onOpenSelfCheck }) {
+  const [activeLayer, setActiveLayer] = useState('cardio')
+  const [activeView, setActiveView] = useState('front')
+  const [selectedStructure, setSelectedStructure] = useState(null)
+
   return (
     <section aria-labelledby="health-map-title">
       <PageHeading
@@ -179,9 +184,30 @@ function HealthMapSection({ onOpenSelfCheck }) {
       />
       <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
         <section className={panelClasses} aria-label="Body map">
-          <BodyMap />
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold text-white">Anatomy index</h2>
+            <div className="flex gap-2">
+              {['front', 'back'].map((view) => (
+                <button
+                  key={view}
+                  type="button"
+                  aria-pressed={activeView === view}
+                  onClick={() => setActiveView(view)}
+                  className={`rounded-lg border px-3 py-1.5 text-xs capitalize ${activeView === view ? 'border-sky-400/40 bg-sky-500/15 text-sky-100' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+                >
+                  {view}
+                </button>
+              ))}
+            </div>
+          </div>
+          <BodyMap
+            activeLayer={activeLayer}
+            view={activeView}
+            onSelectLayer={setActiveLayer}
+            onSelectStructure={setSelectedStructure}
+          />
         </section>
-        <DetailDrawer activeLayer="cardio" onOpenSelfCheck={onOpenSelfCheck} />
+        <DetailDrawer selectedStructure={selectedStructure} onOpenSelfCheck={onOpenSelfCheck} />
       </div>
       <ModelWorkbench models={['ecg']} title="Cardiovascular · ECG beat classification" />
     </section>
@@ -485,6 +511,10 @@ function App() {
   const { settings } = useSettingsStore()
   const environmentName =
     environments.find(({ id }) => id === settings.environment)?.name ?? settings.environment
+
+  if (import.meta.env.DEV && window.location.pathname.endsWith('/anatomy-editor')) {
+    return <AnatomyEditor />
+  }
 
   function navigate(section) {
     setActiveSection(section)

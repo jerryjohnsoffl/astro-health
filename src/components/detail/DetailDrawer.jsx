@@ -1,36 +1,21 @@
-import { ArrowRight, BrainCircuit, Check, Sparkles } from 'lucide-react'
-import brainSvg from '../../assets/Human_Brain_Symbol.svg'
+import { ArrowRight, BrainCircuit, Sparkles } from 'lucide-react'
+import { conditions } from '../../data/conditions.js'
+import { measurements } from '../../data/measurements.js'
+import { sources } from '../../data/sources.js'
 
-const systemContent = {
-  brain: {
-    name: 'Brain & Eyes',
-    tone: 'Healthy',
-    note: 'Minor signs of fluid shift detected.',
-    action: ['Take a cognitive test (10 min)', 'Check for vision changes', 'Stay hydrated'],
-  },
-  cardio: {
-    name: 'Cardio',
-    tone: 'Watch Closely',
-    note: 'Slightly elevated recovery response after exertion.',
-    action: ['Review exertion levels', 'Monitor hydration', 'Check resting heart variability'],
-  },
-  skeletal: {
-    name: 'Skeletal',
-    tone: 'Healthy',
-    note: 'Bone density remains within expected range.',
-    action: ['Continue microgravity resistance routine', 'Log any joint discomfort', 'Review load exposure'],
-  },
-  renal: {
-    name: 'Renal',
-    tone: 'Watch Closely',
-    note: 'Urine concentration trending slightly high.',
-    action: ['Increase water intake', 'Review electrolyte balance', 'Reassess before EVA'],
-  },
-}
-
-export default function DetailDrawer({ activeLayer = 'brain', onOpenSelfCheck }) {
-  const normalizedLayer = activeLayer === 'neuro' || activeLayer === 'brain' ? 'brain' : activeLayer
-  const content = systemContent[normalizedLayer] ?? systemContent.brain
+export default function DetailDrawer({ selectedStructure, onOpenSelfCheck }) {
+  const conditionById = new Map(conditions.map((condition) => [condition.id, condition]))
+  const measurementById = new Map(measurements.map((measurement) => [measurement.id, measurement]))
+  const sourceById = new Map(sources.map((source) => [source.id, source]))
+  const linkedConditions = (selectedStructure?.conditionIds ?? [])
+    .map((id) => conditionById.get(id))
+    .filter(Boolean)
+  const linkedMeasurements = (selectedStructure?.measurementIds ?? [])
+    .map((id) => measurementById.get(id))
+    .filter(Boolean)
+  const linkedSources = (selectedStructure?.sourceIds ?? [])
+    .map((id) => sourceById.get(id))
+    .filter(Boolean)
 
   return (
     <div className="space-y-5">
@@ -41,50 +26,56 @@ export default function DetailDrawer({ activeLayer = 'brain', onOpenSelfCheck })
               <BrainCircuit size={20} />
             </div>
             <div>
-              <div className="text-[11px] uppercase tracking-[0.18em] text-sky-200/70">Selected region</div>
-              <h3 className="text-2xl font-semibold tracking-tight text-white">{content.name}</h3>
+              <div className="text-[11px] uppercase tracking-[0.18em] text-sky-200/70">Selected structure</div>
+              <h3 className="text-2xl font-semibold tracking-tight text-white">{selectedStructure?.name ?? 'Choose a structure'}</h3>
             </div>
           </div>
-          <span
-            className={[
-              'rounded-full border px-2.5 py-1 text-[11px] font-medium',
-              content.tone === 'Healthy'
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                : 'border-amber-500/30 bg-amber-500/10 text-amber-300',
-            ].join(' ')}
-          >
-            {content.tone}
-          </span>
+          {selectedStructure && <span className="rounded-full border border-slate-600 px-2.5 py-1 text-[11px] capitalize text-slate-300">{selectedStructure.kind}</span>}
         </div>
 
-        <div className="mb-4 flex items-center justify-between gap-4 rounded-2xl border border-sky-400/15 bg-sky-500/5 p-3">
-          <div className="flex items-center gap-3">
-            <div className="flex size-20 items-center justify-center rounded-full border border-sky-300/30 bg-sky-400/10 p-2">
-              <img src={brainSvg} alt="Brain icon" className="h-14 w-14 object-contain" />
-            </div>
-            <div>
-              <div className="text-[11px] uppercase tracking-[0.15em] text-sky-100/65">Status</div>
-              <div className="text-lg font-semibold text-white">{content.tone}</div>
-            </div>
-          </div>
-          <div className="text-right text-xs text-sky-100/70">
-            {content.note}
-          </div>
-        </div>
+        {!selectedStructure && <p className="text-sm leading-6 text-slate-300">Select an annotated part of the map to see its linked research content. No health status is inferred from the artwork.</p>}
 
-        <div className="mb-4">
-          <div className="mb-2 text-lg font-semibold text-white">What to do?</div>
-          <ul className="space-y-2 text-sm text-sky-100/80">
-            {content.action.map((item) => (
-              <li key={item} className="flex items-start gap-2">
-                <span className="mt-0.5 grid size-5 place-items-center rounded-full bg-emerald-400/20 text-emerald-300">
-                  <Check size={12} />
-                </span>
-                <span>{item}</span>
-              </li>
+        {selectedStructure && linkedConditions.length === 0 && linkedMeasurements.length === 0 && linkedSources.length === 0 && (
+          <p className="text-sm text-slate-300">No content linked yet.</p>
+        )}
+
+        {linkedConditions.length > 0 && (
+          <section className="mb-4 space-y-3">
+            <h4 className="text-sm font-semibold text-white">Linked conditions</h4>
+            {linkedConditions.map((condition) => (
+              <article key={condition.id} className="rounded-xl border border-sky-500/10 bg-slate-950/40 p-3">
+                <h5 className="text-sm font-medium text-sky-100">{condition.name}</h5>
+                <p className="mt-1 text-xs leading-5 text-slate-300">{condition.summary}</p>
+                <p className="mt-2 text-xs text-amber-200">Research status: {condition.researchStatus}</p>
+              </article>
             ))}
-          </ul>
-        </div>
+          </section>
+        )}
+
+        {linkedMeasurements.length > 0 && (
+          <section className="mb-4 space-y-2">
+            <h4 className="text-sm font-semibold text-white">Linked measurements</h4>
+            {linkedMeasurements.map((measurement) => (
+              <article key={measurement.id} className="rounded-xl border border-sky-500/10 bg-slate-950/40 p-3">
+                <h5 className="text-sm font-medium text-sky-100">{measurement.name}</h5>
+                <p className="mt-1 text-xs leading-5 text-slate-300">{measurement.description}</p>
+                <p className="mt-1 text-xs text-slate-400">Reference status: {measurement.referenceRangeStatus}</p>
+              </article>
+            ))}
+          </section>
+        )}
+
+        {linkedSources.length > 0 && (
+          <section className="mb-4 space-y-2">
+            <h4 className="text-sm font-semibold text-white">Sources</h4>
+            {linkedSources.map((source) => (
+              <a key={source.id} href={source.url} target="_blank" rel="noreferrer" className="block rounded-xl border border-sky-500/10 bg-slate-950/40 p-3 text-sm text-sky-200 hover:text-white">
+                {source.title}
+                <span className="mt-1 block text-xs leading-5 text-slate-400">{source.scope}</span>
+              </a>
+            ))}
+          </section>
+        )}
 
         <button
           type="button"
@@ -93,7 +84,7 @@ export default function DetailDrawer({ activeLayer = 'brain', onOpenSelfCheck })
         >
           <span className="inline-flex items-center gap-2">
             <Sparkles size={16} />
-            View details
+            Open self-check
           </span>
           <ArrowRight size={16} />
         </button>
@@ -110,7 +101,7 @@ export default function DetailDrawer({ activeLayer = 'brain', onOpenSelfCheck })
           </span>
         </div>
         <p className="mb-4 text-sm text-sky-100/75">
-          Enter current symptoms and measurements to run an on-device differential ranking.
+          Enter current symptoms and measurements to run an on-device differential ranking. Results are decision support, not a diagnosis.
         </p>
         <button
           type="button"
