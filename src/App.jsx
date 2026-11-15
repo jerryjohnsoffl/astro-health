@@ -5,6 +5,7 @@ import {
   ChevronRight,
   CircleHelp,
   CloudSun,
+  Download,
   HeartPulse,
   Home,
   Leaf,
@@ -35,6 +36,7 @@ import { anatomyCatalogue } from './anatomy/catalogue.js'
 import { useHealthStore } from './store/useHealthStore.js'
 import { useSettingsStore } from './store/useSettingsStore.js'
 import { getVitalsSnapshot } from './overview/vitalsSnapshot.js'
+import { createHealthReport, downloadReport } from './report/exportReport.js'
 
 const navItems = [
   { id: 'overview', label: 'Overview', icon: Home },
@@ -48,6 +50,46 @@ const navItems = [
 ]
 
 const panelClasses = 'rounded-[28px] border border-sky-500/15 bg-slate-900/35 p-4 sm:p-5'
+
+function ReportExport() {
+  const { healthState } = useHealthStore()
+  const { settings } = useSettingsStore()
+  const [exportError, setExportError] = useState('')
+  const [exportMessage, setExportMessage] = useState('')
+
+  function handleExport(format) {
+    setExportError('')
+    setExportMessage('')
+    try {
+      downloadReport(createHealthReport(healthState, settings), format)
+      setExportMessage(`Report downloaded as ${format.toUpperCase()}.`)
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  return (
+    <div role="group" aria-label="Export health report" className="flex flex-wrap items-center gap-2">
+      <span className="mr-1 inline-flex items-center gap-2 text-sm font-medium text-slate-300">
+        <Download size={16} />
+        Export report
+      </span>
+      {['pdf', 'csv'].map((format) => (
+        <button
+          key={format}
+          type="button"
+          aria-label={`Export report as ${format.toUpperCase()}`}
+          onClick={() => handleExport(format)}
+          className="rounded-xl border border-sky-300/30 bg-sky-500/15 px-3 py-2 text-sm font-medium text-sky-100 hover:bg-sky-500/25"
+        >
+          {format.toUpperCase()}
+        </button>
+      ))}
+      {exportMessage && <p className="text-sm text-emerald-200" role="status">{exportMessage}</p>}
+      {exportError && <p className="text-sm text-rose-300" role="alert">{exportError}</p>}
+    </div>
+  )
+}
 
 function HowToUseDialog({ onClose }) {
   const dialogRef = useRef(null)
@@ -201,6 +243,10 @@ function OverviewSection({ navigate }) {
         description="A high-level view of crew health tools. Open a section to enter measurements or run a model."
       />
 
+      <div className="mb-5">
+        <ReportExport />
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <SectionLink
           icon={Stethoscope}
@@ -302,7 +348,7 @@ function HealthMapSection({ onOpenSelfCheck }) {
         title="Body systems and cardiovascular signals"
         description="Review body-system context and run the ECG beat classifier with one 180-sample MLII window."
       />
-      <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <section className={panelClasses} aria-label="Body map">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-semibold text-white">Anatomy index</h2>
@@ -328,13 +374,15 @@ function HealthMapSection({ onOpenSelfCheck }) {
             onSelectStructure={setSelectedStructure}
           />
         </section>
-        <DetailDrawer
-          selectedStructure={selectedStructure}
-          modelIndicators={modelIndicators}
-          onOpenSelfCheck={onOpenSelfCheck}
-        />
+        <div className="min-w-0">
+          <DetailDrawer
+            selectedStructure={selectedStructure}
+            modelIndicators={modelIndicators}
+            onOpenSelfCheck={onOpenSelfCheck}
+          />
+          <ModelWorkbench models={['ecg']} title="Cardiovascular · ECG beat classification" />
+        </div>
       </div>
-      <ModelWorkbench models={['ecg']} title="Cardiovascular · ECG beat classification" />
     </section>
   )
 }
@@ -442,6 +490,13 @@ function SettingsSection() {
         title="Settings"
         description="Set your mission context, measurement units, and crew profile. Profile details and preferences are saved locally in this browser and can be changed anytime."
       />
+      <div className={`${panelClasses} mb-5`}>
+        <h2 className="mb-3 text-lg font-semibold text-white">Export health report</h2>
+        <p className="mb-4 text-sm text-slate-400">
+          Download the saved health snapshot and crew context. Raw sensor samples are not included.
+        </p>
+        <ReportExport />
+      </div>
       <form onSubmit={handleSubmit} className={`${panelClasses} space-y-6`}>
         <fieldset className="space-y-4">
           <legend className="text-lg font-semibold text-white">Mission context</legend>
