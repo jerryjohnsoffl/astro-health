@@ -264,7 +264,7 @@ export default function AnatomyEditor() {
                 {points.length > 0 && (
                   <>
                     {points.length > 2 && <polygon points={points.map((point) => point.join(',')).join(' ')} fill="rgba(250,204,21,.14)" stroke="#facc15" strokeWidth="2" vectorEffect="non-scaling-stroke" />}
-                    {points.map(([x, y], index) => <circle key={`${x}-${y}-${index}`} cx={x} cy={y} r="5" fill="#facc15" vectorEffect="non-scaling-stroke" />)}
+                    {points.map(([x, y], index) => <circle key={`${x}-${y}-${index}`} cx={x} cy={y} r="4" fill="#facc15" vectorEffect="non-scaling-stroke" />)}
                   </>
                 )}
               </svg>
