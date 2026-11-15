@@ -24,6 +24,7 @@ import DetailDrawer from './components/detail/DetailDrawer'
 import EmergencyFlow from './components/emergency/EmergencyFlow'
 import EmergencyButton from './components/layout/EmergencyButton'
 import ModelWorkbench from './components/ml/ModelWorkbench'
+import ReminderCenter from './components/reminders/ReminderCenter'
 import ManualWellbeingCheckin from './components/wellbeing/ManualWellbeingCheckin'
 import astrohealthIcon from './assets/astrohealth-icon.svg'
 import { environments } from './data/environments.js'
@@ -504,7 +505,7 @@ function App() {
       case 'emergency':
         return <EmergencySection />
       case 'reminders':
-        return <ComingSoonSection title="Reminders" />
+        return <ReminderCenter />
       case 'settings':
         return <SettingsSection key={settings.profileSetupComplete ? 'profile-complete' : 'profile-needed'} />
       case 'overview':
