@@ -233,7 +233,7 @@ function OverviewSection({ navigate }) {
               <p className="text-xs text-slate-400">Latest saved entries · no live wearable connection</p>
             </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             {vitals.map(({ id, label, value, unit, source, recordedAt }) => (
               <div key={id} className="rounded-2xl border border-sky-500/10 bg-slate-950/45 p-3">
                 <p className="text-sm text-slate-400">{label}</p>
