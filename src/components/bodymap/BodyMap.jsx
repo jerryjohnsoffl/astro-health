@@ -15,8 +15,22 @@ const layers = [
   { id: 'renal', src: renalSvg, label: 'Renal', opacity: 0.8 },
 ]
 
-export default function BodyMap({ activeLayer, view, onSelectLayer, onSelectStructure }) {
+export default function BodyMap({
+  activeLayer,
+  view,
+  modelIndicators = [],
+  onSelectLayer,
+  onSelectStructure,
+}) {
   const viewBox = viewBoxFor(view)
+  const indicatorsByStructure = new Map()
+  for (const indicator of modelIndicators) {
+    for (const structureId of indicator.structureIds) {
+      const current = indicatorsByStructure.get(structureId) ?? []
+      current.push(indicator)
+      indicatorsByStructure.set(structureId, current)
+    }
+  }
   const visibleStructures = anatomyCatalogue.structures
     .filter((structure) => structure.view === view)
     .sort((left, right) => {
@@ -71,31 +85,89 @@ export default function BodyMap({ activeLayer, view, onSelectLayer, onSelectStru
           onClick={handleMapClick}
           aria-label={`${view} body map`}
         >
-          {visibleStructures.map((structure) => (
-            <polygon
-              key={structure.id}
-              points={structure.polygon.map((point) => point.join(',')).join(' ')}
-              fill={structure.layer === activeLayer ? 'rgba(56,189,248,.26)' : 'rgba(148,163,184,.12)'}
-              stroke={structure.layer === activeLayer ? '#38bdf8' : '#94a3b8'}
-              strokeWidth="2"
-              vectorEffect="non-scaling-stroke"
-              role="button"
-              tabIndex="0"
-              aria-label={`Select ${structure.name}`}
-              onClick={(event) => {
-                event.stopPropagation()
-                onSelectStructure(structure)
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
+          {visibleStructures.map((structure) => {
+            const results = indicatorsByStructure.get(structure.id) ?? []
+            const hasCDSS = results.some(({ source }) => source === 'CDSS')
+            const hasECG = results.some(({ source }) => source === 'ECG')
+            const stroke = hasCDSS && hasECG
+              ? '#fbbf24'
+              : hasCDSS
+                ? '#c4b5fd'
+                : hasECG
+                  ? '#67e8f9'
+                  : structure.layer === activeLayer
+                    ? '#38bdf8'
+                    : '#94a3b8'
+            const fill = hasCDSS && hasECG
+              ? 'rgba(251,191,36,.32)'
+              : hasCDSS
+                ? 'rgba(167,139,250,.32)'
+                : hasECG
+                  ? 'rgba(34,211,238,.32)'
+                  : structure.layer === activeLayer
+                    ? 'rgba(56,189,248,.26)'
+                    : 'rgba(148,163,184,.12)'
+
+            return (
+              <polygon
+                key={structure.id}
+                points={structure.polygon.map((point) => point.join(',')).join(' ')}
+                fill={fill}
+                stroke={stroke}
+                strokeWidth={results.length > 0 ? '3' : '2'}
+                vectorEffect="non-scaling-stroke"
+                role="button"
+                tabIndex="0"
+                aria-label={`Select ${structure.name}${results.length > 0 ? `, associated with ${results.map(({ source }) => source).join(' and ')} model result` : ''}`}
+                onClick={(event) => {
+                  event.stopPropagation()
                   onSelectStructure(structure)
-                }
-              }}
-            />
-          ))}
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    onSelectStructure(structure)
+                  }
+                }}
+              />
+            )
+          })}
         </svg>
       </div>
+      <section
+        className="rounded-xl border border-sky-500/10 bg-slate-950/40 p-3 text-xs leading-5 text-slate-300"
+        aria-live="polite"
+        aria-label="Mapped model results"
+      >
+        <h3 className="font-semibold text-white">Model-linked areas</h3>
+        {modelIndicators.length === 0 ? (
+          <p className="mt-1 text-slate-400">No saved CDSS or ECG result to map yet.</p>
+        ) : (
+          <ul className="mt-2 space-y-2">
+            {modelIndicators.map((indicator) => {
+              const names = anatomyCatalogue.structures
+                .filter((structure) => indicator.structureIds.includes(structure.id))
+                .map((structure) => `${structure.name} (${structure.view})`)
+              return (
+                <li key={indicator.id}>
+                  <span className={indicator.source === 'CDSS' ? 'text-violet-200' : 'text-cyan-200'}>
+                    {indicator.source}
+                  </span>
+                  {indicator.source === 'CDSS' ? ' top-ranked category: ' : ' beat class: '}
+                  {indicator.label} ({(indicator.score * 100).toFixed(1)}% model score).
+                  {' '}{names.length > 0 ? `Mapped structure${names.length > 1 ? 's' : ''}: ${names.join(', ')}.` : 'No structure is linked to this result.'}
+                  {indicator.recordedAt && ` Saved ${new Date(indicator.recordedAt).toLocaleString()}.`}
+                </li>
+              )
+            })}
+          </ul>
+        )}
+        {modelIndicators.length > 0 && (
+          <p className="mt-2 text-slate-400">
+            Violet marks CDSS links, cyan marks ECG links, and amber marks both. Highlighting shows a catalogue association only. CDSS scores are experimental rankings, and ECG labels classify a beat; neither identifies a diagnosed problem.
+          </p>
+        )}
+      </section>
       {anatomyCatalogue.structures.length === 0 && (
         <p className="text-center text-xs leading-5 text-slate-400">
           No anatomy annotations are available yet. Draw and verify polygons at <code>/anatomy-editor</code>.

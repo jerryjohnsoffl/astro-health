@@ -11,6 +11,7 @@ import {
 import { conditions } from '../src/data/conditions.js'
 import { measurements } from '../src/data/measurements.js'
 import { sources } from '../src/data/sources.js'
+import { getModelAnatomyIndicators } from '../src/anatomy/modelIndicators.js'
 
 const square = [[300, 100], [400, 100], [400, 200], [300, 200]]
 const structures = [
@@ -107,4 +108,55 @@ test('catalogue validation checks uniqueness, bounds, region membership, and con
     ...catalog,
     structures: [],
   }, contentIds).some((error) => error.includes('has no structures')))
+})
+
+test('model indicators highlight only anatomy explicitly linked to the top CDSS result', () => {
+  const catalogue = {
+    structures: [
+      { id: 'brain-front', name: 'Brain', layer: 'neuro', kind: 'organ', conditionIds: ['sans'] },
+      { id: 'kidney-front', name: 'Kidney', layer: 'renal', kind: 'organ', conditionIds: ['renal-stone-formation'] },
+      { id: 'heart-front', name: 'Heart', layer: 'cardio', kind: 'organ', conditionIds: [] },
+    ],
+  }
+  const healthState = {
+    cdssAssessment: {
+      predictions: [
+        { name: 'sans', probability: 0.61 },
+        { name: 'renal-stone-formation', probability: 0.25 },
+      ],
+      recordedAt: '2026-11-15T00:00:00.000Z',
+    },
+    sensorAnalyses: {
+      ecg: {
+        predictions: [{ name: 'V', description: 'Ventricular ectopic', probability: 0.82 }],
+        recordedAt: '2026-11-15T00:05:00.000Z',
+      },
+    },
+  }
+
+  assert.deepEqual(
+    getModelAnatomyIndicators(healthState, catalogue).map(({ source, structureIds }) => ({
+      source,
+      structureIds,
+    })),
+    [
+      { source: 'CDSS', structureIds: ['brain-front'] },
+      { source: 'ECG', structureIds: ['heart-front'] },
+    ],
+  )
+})
+
+test('unmapped CDSS categories remain visible but do not infer anatomy', () => {
+  const indicators = getModelAnatomyIndicators({
+    cdssAssessment: {
+      predictions: [{ name: 'cardiac-concern', probability: 0.7 }],
+      recordedAt: '2026-11-15T00:00:00.000Z',
+    },
+    sensorAnalyses: { ecg: null },
+  }, {
+    structures: [{ id: 'heart-front', layer: 'cardio', kind: 'organ', conditionIds: [] }],
+  })
+
+  assert.equal(indicators[0].label, 'cardiac-concern')
+  assert.deepEqual(indicators[0].structureIds, [])
 })

@@ -15,6 +15,9 @@ organs.
 The point classifier and catalogue validation live in `src/anatomy/` and are
 covered by `npm test`.
 
+The Health Map can highlight structures linked to the saved top CDSS category
+or ECG beat result. These are experimental model/catalogue associations, not
+diagnoses; results without an explicit anatomy link are not mapped.
 
 ## React + Vite
 

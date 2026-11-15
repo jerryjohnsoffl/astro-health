@@ -3,7 +3,11 @@ import { conditions } from '../../data/conditions.js'
 import { measurements } from '../../data/measurements.js'
 import { sources } from '../../data/sources.js'
 
-export default function DetailDrawer({ selectedStructure, onOpenSelfCheck }) {
+export default function DetailDrawer({
+  selectedStructure,
+  modelIndicators = [],
+  onOpenSelfCheck,
+}) {
   const conditionById = new Map(conditions.map((condition) => [condition.id, condition]))
   const measurementById = new Map(measurements.map((measurement) => [measurement.id, measurement]))
   const sourceById = new Map(sources.map((source) => [source.id, source]))
@@ -16,6 +20,9 @@ export default function DetailDrawer({ selectedStructure, onOpenSelfCheck }) {
   const linkedSources = (selectedStructure?.sourceIds ?? [])
     .map((id) => sourceById.get(id))
     .filter(Boolean)
+  const linkedModelIndicators = modelIndicators.filter((indicator) =>
+    indicator.structureIds.includes(selectedStructure?.id),
+  )
 
   return (
     <div className="space-y-5">
@@ -34,6 +41,21 @@ export default function DetailDrawer({ selectedStructure, onOpenSelfCheck }) {
         </div>
 
         {!selectedStructure && <p className="text-sm leading-6 text-slate-300">Select an annotated part of the map to see its linked research content. No health status is inferred from the artwork.</p>}
+
+        {linkedModelIndicators.length > 0 && (
+          <section className="mb-4 rounded-xl border border-violet-400/20 bg-violet-500/5 p-3">
+            <h4 className="text-sm font-semibold text-violet-100">Associated saved model results</h4>
+            <ul className="mt-2 space-y-1 text-xs leading-5 text-slate-300">
+              {linkedModelIndicators.map((indicator) => (
+                <li key={indicator.id}>
+                  {indicator.source}: {indicator.label} ({(indicator.score * 100).toFixed(1)}% model score)
+                  {indicator.recordedAt && ` · saved ${new Date(indicator.recordedAt).toLocaleString()}`}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-slate-400">These are catalogue/model associations, not a diagnosis or confirmed problem.</p>
+          </section>
+        )}
 
         {selectedStructure && linkedConditions.length === 0 && linkedMeasurements.length === 0 && linkedSources.length === 0 && (
           <p className="text-sm text-slate-300">No content linked yet.</p>

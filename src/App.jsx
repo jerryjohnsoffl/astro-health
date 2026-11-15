@@ -3,6 +3,7 @@ import {
   Bell,
   BrainCircuit,
   ChevronRight,
+  CircleHelp,
   CloudSun,
   HeartPulse,
   Home,
@@ -17,7 +18,7 @@ import {
   X,
   Zap,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import AppShell from './core/AppShell'
 import BodyMap from './components/bodymap/BodyMap'
 import AnatomyEditor from './components/bodymap/AnatomyEditor'
@@ -29,7 +30,11 @@ import ReminderCenter from './components/reminders/ReminderCenter'
 import ManualWellbeingCheckin from './components/wellbeing/ManualWellbeingCheckin'
 import astrohealthIcon from './assets/astrohealth-icon.svg'
 import { environments } from './data/environments.js'
+import { getModelAnatomyIndicators } from './anatomy/modelIndicators.js'
+import { anatomyCatalogue } from './anatomy/catalogue.js'
+import { useHealthStore } from './store/useHealthStore.js'
 import { useSettingsStore } from './store/useSettingsStore.js'
+import { getVitalsSnapshot } from './overview/vitalsSnapshot.js'
 
 const navItems = [
   { id: 'overview', label: 'Overview', icon: Home },
@@ -43,6 +48,114 @@ const navItems = [
 ]
 
 const panelClasses = 'rounded-[28px] border border-sky-500/15 bg-slate-900/35 p-4 sm:p-5'
+
+function HowToUseDialog({ onClose }) {
+  const dialogRef = useRef(null)
+  const closeButtonRef = useRef(null)
+
+  useEffect(() => {
+    const previousFocus = document.activeElement
+    closeButtonRef.current?.focus()
+    return () => {
+      if (previousFocus instanceof HTMLElement) previousFocus.focus()
+    }
+  }, [])
+
+  function handleKeyDown(event) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      onClose()
+      return
+    }
+    if (event.key !== 'Tab') return
+
+    const focusable = dialogRef.current?.querySelectorAll(
+      'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled)',
+    )
+    if (!focusable?.length) {
+      event.preventDefault()
+      return
+    }
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+    >
+      <section
+        ref={dialogRef}
+        id="how-to-use-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="how-to-use-title"
+        aria-describedby="how-to-use-intro"
+        onKeyDown={handleKeyDown}
+        className="w-full max-w-2xl rounded-3xl border border-sky-400/25 bg-slate-900 p-5 shadow-2xl sm:p-6"
+      >
+        <header className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-sky-300/80">Quick guide</p>
+            <h2 id="how-to-use-title" className="mt-1 text-2xl font-semibold text-white">How to use AstroHealth</h2>
+            <p id="how-to-use-intro" className="mt-2 text-sm leading-6 text-slate-300">
+              Explore the dashboard, enter health context, and review linked model results.
+            </p>
+          </div>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            onClick={onClose}
+            aria-label="Close how-to-use guide"
+            className="grid size-9 shrink-0 place-items-center rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white"
+          >
+            <X size={18} />
+          </button>
+        </header>
+
+        <div className="mt-5 max-h-[65vh] space-y-4 overflow-y-auto pr-2 text-sm leading-6 text-slate-300">
+          <section>
+            <h3 className="font-semibold text-sky-100">1. Start with the dashboard</h3>
+            <p>Use the sidebar or mobile menu to open a section. Set your profile, mission environment, and units in Settings. The dashboard shows saved entries and does not receive live wearable readings.</p>
+          </section>
+          <section>
+            <h3 className="font-semibold text-sky-100">2. Run Self-Check</h3>
+            <p>Choose symptom severities, enter the requested context values, then select “Rank possible conditions.” The CDSS output is an experimental ranking, not a diagnosis or treatment recommendation.</p>
+          </section>
+          <section>
+            <h3 className="font-semibold text-sky-100">3. Explore the Health Map</h3>
+            <p>Choose front or back, select a system layer, and click an annotated shape to view its linked research content. Violet highlights map to the top CDSS category; cyan highlights show where an ECG beat result is associated. Amber means both. These are catalogue/model links—not confirmed problem areas. No linked structure means no highlight.</p>
+          </section>
+          <section>
+            <h3 className="font-semibold text-sky-100">4. Analyze sensor files</h3>
+            <p>In Health Map, ECG accepts one numeric 180-sample MLII beat window. In Wellbeing, sleep analysis accepts one 30-second, 3,000-sample by 7-channel CSV epoch. Use files matching the documented format; the app reads them locally in your browser.</p>
+          </section>
+          <section>
+            <h3 className="font-semibold text-sky-100">5. Wellbeing, Environment, and Reminders</h3>
+            <p>Use Wellbeing for self-reported sleep and recovery, Environment for mission context, and Reminders to review scheduled prompts. Self-reported entries are not sensor measurements.</p>
+          </section>
+          <section>
+            <h3 className="font-semibold text-sky-100">6. Emergency guidance</h3>
+            <p>Use the Emergency section or the persistent emergency button to view the available guide. Follow mission-approved procedures and contact the appropriate medical or mission support; this app is not an emergency service.</p>
+          </section>
+          <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-100">
+            Health entries and profile settings are saved in this browser. Model outputs and mapped anatomy are experimental decision-support information, not clinical diagnoses.
+          </p>
+        </div>
+      </section>
+    </div>
+  )
+}
 
 function PageHeading({ id, eyebrow, title, description }) {
   return (
@@ -76,6 +189,9 @@ function SectionLink({ icon: Icon, title, description, onClick }) {
 }
 
 function OverviewSection({ navigate }) {
+  const { healthState } = useHealthStore()
+  const vitals = getVitalsSnapshot(healthState)
+
   return (
     <section aria-labelledby="overview-title">
       <PageHeading
@@ -114,19 +230,21 @@ function OverviewSection({ navigate }) {
             </span>
             <div>
               <h2 id="overview-vitals" className="text-lg font-semibold text-white">Vitals snapshot</h2>
-              <p className="text-xs text-slate-400">Illustrative dashboard values — not live sensor readings</p>
+              <p className="text-xs text-slate-400">Latest saved entries · no live wearable connection</p>
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {[
-              ['Heart rate', '68 bpm'],
-              ['Hydration', '72%'],
-              ['Body temperature', '36.6 °C'],
-              ['Sleep (24 h)', '7.2 h'],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-2xl border border-sky-500/10 bg-slate-950/45 p-3">
+            {vitals.map(({ id, label, value, unit, source, recordedAt }) => (
+              <div key={id} className="rounded-2xl border border-sky-500/10 bg-slate-950/45 p-3">
                 <p className="text-sm text-slate-400">{label}</p>
-                <p className="mt-1 text-lg font-semibold text-white">{value}</p>
+                <p className="mt-1 text-lg font-semibold text-white">
+                  {value === undefined ? 'Not recorded' : `${value} ${unit}`}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {source
+                    ? `${source} · ${new Date(recordedAt).toLocaleString()}`
+                    : 'Enter a value in Self-Check or Wellbeing'}
+                </p>
               </div>
             ))}
           </div>
@@ -173,6 +291,8 @@ function HealthMapSection({ onOpenSelfCheck }) {
   const [activeLayer, setActiveLayer] = useState('cardio')
   const [activeView, setActiveView] = useState('front')
   const [selectedStructure, setSelectedStructure] = useState(null)
+  const { healthState } = useHealthStore()
+  const modelIndicators = getModelAnatomyIndicators(healthState, anatomyCatalogue)
 
   return (
     <section aria-labelledby="health-map-title">
@@ -203,11 +323,16 @@ function HealthMapSection({ onOpenSelfCheck }) {
           <BodyMap
             activeLayer={activeLayer}
             view={activeView}
+            modelIndicators={modelIndicators}
             onSelectLayer={setActiveLayer}
             onSelectStructure={setSelectedStructure}
           />
         </section>
-        <DetailDrawer selectedStructure={selectedStructure} onOpenSelfCheck={onOpenSelfCheck} />
+        <DetailDrawer
+          selectedStructure={selectedStructure}
+          modelIndicators={modelIndicators}
+          onOpenSelfCheck={onOpenSelfCheck}
+        />
       </div>
       <ModelWorkbench models={['ecg']} title="Cardiovascular · ECG beat classification" />
     </section>
@@ -508,6 +633,7 @@ function ComingSoonSection({ title }) {
 function App() {
   const [activeSection, setActiveSection] = useState('overview')
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isHowToUseOpen, setIsHowToUseOpen] = useState(false)
   const { settings } = useSettingsStore()
   const environmentName =
     environments.find(({ id }) => id === settings.environment)?.name ?? settings.environment
@@ -584,6 +710,18 @@ function App() {
             </div>
             <button
               type="button"
+              aria-haspopup="dialog"
+              aria-expanded={isHowToUseOpen}
+              aria-controls="how-to-use-dialog"
+              onClick={() => setIsHowToUseOpen(true)}
+              className="flex shrink-0 items-center gap-2 rounded-xl border border-sky-400/25 bg-sky-500/10 px-3 py-2 text-sm text-sky-100 transition hover:border-sky-300/50 hover:bg-sky-500/15"
+            >
+              <CircleHelp size={17} />
+              <span className="hidden sm:inline">How to use</span>
+              <span className="sr-only sm:hidden">How to use</span>
+            </button>
+            <button
+              type="button"
               aria-label={isMobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
               aria-expanded={isMobileMenuOpen}
               aria-controls="mobile-navigation"
@@ -656,6 +794,7 @@ function App() {
       </div>
       <EmergencyButton onClick={() => navigate('emergency')} />
       {!settings.profileSetupComplete && <FirstUseProfileDialog />}
+      {isHowToUseOpen && <HowToUseDialog onClose={() => setIsHowToUseOpen(false)} />}
     </AppShell>
   )
 }
