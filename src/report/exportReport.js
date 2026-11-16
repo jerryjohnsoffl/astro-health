@@ -1,8 +1,10 @@
 import { conditions } from '../data/conditions.js'
+import { environments } from '../data/environments.js'
 import { measurements } from '../data/measurements.js'
 import { getVitalsSnapshot } from '../overview/vitalsSnapshot.js'
 
 const CSV_HEADERS = ['Section', 'Item', 'Value', 'Unit', 'Recorded at', 'Notes']
+const REPORT_TITLE = 'AstroHealth crew health report'
 
 function createRow(section, item, value, unit = '', recordedAt = '', notes = '') {
   return {
@@ -157,7 +159,9 @@ export function createHealthReport(healthState, settings, generatedAt = new Date
 
 function csvCell(value) {
   let text = String(value ?? '')
-  if (/^[\s]*[=+\-@]/.test(text)) {
+  // Neutralise spreadsheet formulas, but leave plain numbers such as -5 or +3.2 untouched.
+  const isPlainNumber = /^[+-]?\d+(\.\d+)?$/.test(text.trim())
+  if ((!isPlainNumber && /^[\s]*[=+\-@]/.test(text)) || /^[\t\r]/.test(text)) {
     text = `'${text}`
   }
   return `"${text.replaceAll('"', '""')}"`
@@ -174,6 +178,25 @@ export function createCsvReport(rows) {
   ].join('\r\n')
 }
 
+// ---------------------------------------------------------------------------
+// PDF
+// ---------------------------------------------------------------------------
+
+// Real Helvetica / Helvetica-Bold advance widths (units per 1000 em) for ASCII 32-126.
+const HELVETICA_WIDTHS = [278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556, 1015, 667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556, 333, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584]
+const HELVETICA_BOLD_WIDTHS = [278, 333, 474, 556, 556, 889, 722, 238, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 333, 333, 584, 584, 584, 611, 975, 722, 722, 722, 722, 667, 611, 778, 722, 278, 556, 722, 611, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 333, 278, 333, 584, 556, 333, 556, 611, 556, 611, 556, 333, 611, 611, 278, 278, 556, 278, 889, 611, 611, 611, 611, 389, 556, 333, 611, 556, 778, 556, 556, 500, 389, 280, 389, 584]
+
+const PAGE = { left: 50, right: 562, top: 750, bottomText: 55 }
+const LINE_H = 13 // distance between wrapped 9 pt lines
+const DETAIL_FIRST = 11 // first detail line sits this far below the last text line
+const DETAIL_H = 10
+const RULE_BELOW = 8 // last baseline -> separator rule
+const RULE_ABOVE = 7 // separator rule -> top of next row's capitals
+const CAP_HEIGHT = 6.5 // 9 pt Helvetica capital height
+
+const EXPERIMENTAL_SECTIONS = new Set(['Sensor analysis', 'Self-check model results'])
+const environmentNames = new Map(environments.map((environment) => [environment.id, environment.name]))
+
 function toPdfText(value) {
   return String(value ?? '')
     .normalize('NFKD')
@@ -185,21 +208,39 @@ function escapePdfText(value) {
   return toPdfText(value).replace(/[\\()]/g, '\\$&')
 }
 
-function wrapPdfLine(value, maxLength = 90) {
+function pdfTextWidth(value, fontSize, bold = false) {
+  const table = bold ? HELVETICA_BOLD_WIDTHS : HELVETICA_WIDTHS
+  let units = 0
+  for (const character of toPdfText(value)) {
+    units += table[character.charCodeAt(0) - 32] ?? 556
+  }
+  return (units * fontSize) / 1000
+}
+
+function splitLongWord(word, fontSize, maxWidth) {
+  const chunks = []
+  let chunk = ''
+  for (const character of word) {
+    if (chunk && pdfTextWidth(chunk + character, fontSize) > maxWidth) {
+      chunks.push(chunk)
+      chunk = character
+    } else {
+      chunk += character
+    }
+  }
+  if (chunk) chunks.push(chunk)
+  return chunks
+}
+
+function wrapPdfLine(value, fontSize, maxWidth) {
   const words = toPdfText(value)
     .split(/\s+/)
-    .flatMap((word) => {
-      if (word.length <= maxLength) return [word]
-      const chunks = []
-      for (let index = 0; index < word.length; index += maxLength) {
-        chunks.push(word.slice(index, index + maxLength))
-      }
-      return chunks
-    })
+    .filter(Boolean)
+    .flatMap((word) => (pdfTextWidth(word, fontSize) <= maxWidth ? [word] : splitLongWord(word, fontSize, maxWidth)))
   const lines = []
   let line = ''
   for (const word of words) {
-    if (line && `${line} ${word}`.length > maxLength) {
+    if (line && pdfTextWidth(`${line} ${word}`, fontSize) > maxWidth) {
       lines.push(line)
       line = word
     } else {
@@ -210,20 +251,13 @@ function wrapPdfLine(value, maxLength = 90) {
   return lines.length ? lines : ['']
 }
 
-function pdfTextWidth(value, fontSize) {
-  const narrowCharacters = new Set(" ilI.,:;'!|")
-  return [...toPdfText(value)].reduce((width, character) => {
-    let characterWidth = 0.556
-    if (character === ' ') characterWidth = 0.278
-    else if (character === 'M') characterWidth = 0.833
-    else if (character === 'W') characterWidth = 0.944
-    else if (character === 'm') characterWidth = 0.833
-    else if (character === 'w') characterWidth = 0.722
-    else if (narrowCharacters.has(character)) characterWidth = 0.25
-    else if (/[A-Z]/.test(character)) characterWidth = 0.667
-    else if (/[a-z]/.test(character)) characterWidth = 0.52
-    return width + characterWidth * fontSize
-  }, 0)
+function fitText(value, fontSize, maxWidth, bold = false) {
+  let text = toPdfText(value)
+  if (pdfTextWidth(text, fontSize, bold) <= maxWidth) return text
+  while (text.length > 1 && pdfTextWidth(`${text}...`, fontSize, bold) > maxWidth) {
+    text = text.slice(0, -1)
+  }
+  return `${text}...`
 }
 
 function getReportValue(rows, section, item, fallback = '') {
@@ -241,12 +275,35 @@ function formatPdfTimestamp(value) {
   }
 }
 
+function formatRecordedAt(value) {
+  const date = new Date(value)
+  if (!value || !Number.isFinite(date.getTime())) return String(value ?? '')
+  const { date: day, time } = formatPdfTimestamp(date)
+  return `${day}, ${time}`
+}
+
+function describeRow(row) {
+  let label = row.item
+  let notes = row.notes
+  const sensorResult = /^(.+ result): (.+)$/.exec(row.item)
+  if (row.section === 'Sensor analysis' && sensorResult && row.notes) {
+    label = `${sensorResult[1]}: ${row.notes} (${sensorResult[2]})`
+    notes = ''
+  }
+  let value = [row.value, row.unit].filter((part) => part !== '').join(' ') || 'Not recorded'
+  if (row.section === 'Triage' && row.item === 'Current level' && row.value === 'unknown') {
+    value = 'Not assessed'
+  }
+  return { label, notes, value }
+}
+
 export function createPdfReport(rows) {
   const generatedAt = getReportValue(rows, 'Report', 'Generated at', new Date().toISOString())
   const { date, time } = formatPdfTimestamp(generatedAt)
   const name = getReportValue(rows, 'Crew profile', 'Display name', 'Not set')
   const crewId = getReportValue(rows, 'Crew profile', 'Crew ID', 'Not set')
-  const environment = getReportValue(rows, 'Mission context', 'Environment', 'Not set')
+  const environmentId = getReportValue(rows, 'Mission context', 'Environment', 'Not set')
+  const environment = environmentNames.get(environmentId) ?? environmentId
   const units = getReportValue(rows, 'Mission context', 'Units', 'Not set')
   const bodyRows = rows.filter(
     (row) => row.section !== 'Report' && row.section !== 'Crew profile' && row.section !== 'Mission context',
@@ -278,98 +335,90 @@ export function createPdfReport(rows) {
     )
   }
 
+  function addRightText(text, y, font = 'F1', size = 10, color = '0 g') {
+    addText(text, PAGE.right - pdfTextWidth(text, size, font === 'F2'), y, font, size, color)
+  }
+
   function addRule(y, color = '0.82 0.87 0.9 RG') {
-    pageCommands.push(`${color} 0.6 w 50 ${y.toFixed(2)} m 562 ${y.toFixed(2)} l S`)
+    pageCommands.push(`${color} 0.6 w ${PAGE.left} ${y.toFixed(2)} m ${PAGE.right} ${y.toFixed(2)} l S`)
   }
 
   function addPageHeader() {
     pageCommands = []
     pages.push(pageCommands)
-    // Title — left side
-    addText('MEDICAL HEALTH REPORT', 50, 750, 'F2', 17, '0.05 0.25 0.4 rg')
-    // Right-align name & crew ID; keep them well above the left-side date block
-    const nameText = `Name: ${name}`
-    const crewIdText = `Crew ID: ${crewId}`
-    addText(nameText, 562 - pdfTextWidth(nameText, 10), 750, 'F1', 10)
-    addText(crewIdText, 562 - pdfTextWidth(crewIdText, 10), 736, 'F1', 10)
-    // Left-side date / time block — moved down so it doesn't crowd the title
-    addText(`Date: ${date}`, 50, 718, 'F1', 10)
-    addText(`Time: ${time}`, 50, 704, 'F1', 10)
-    addText(`Mission: ${environment} | Units: ${units}`, 50, 688, 'F1', 9, '0.3 g')
-    addText('Decision-support information only; not a medical diagnosis.', 50, 674, 'F1', 8, '0.35 g')
+    addText(REPORT_TITLE, PAGE.left, PAGE.top, 'F2', 16, '0.05 0.25 0.4 rg')
+    addRightText(fitText(`Name: ${name}`, 10, 200), 750)
+    addRightText(fitText(`Crew ID: ${crewId}`, 10, 200), 736)
+    addText(`Date: ${date}`, PAGE.left, 718, 'F1', 10)
+    addText(`Time: ${time}`, PAGE.left, 704, 'F1', 10)
+    addText(fitText(`Mission: ${environment} | Units: ${units}`, 9, 512), PAGE.left, 688, 'F1', 9, '0.3 g')
+    addText('Decision-support information only; not a medical diagnosis.', PAGE.left, 674, 'F1', 8, '0.35 g')
     addRule(662)
     cursorY = 644
   }
 
-  function addSectionHeading(title) {
-    // Extra top-of-section breathing room
-    cursorY -= 6
-    addText(title.toUpperCase(), 50, cursorY, 'F2', 10, '0.05 0.25 0.4 rg')
-    cursorY -= 12
+  function addSectionHeading(title, continued = false) {
+    cursorY -= 4
+    addText(`${title}${continued ? ' (continued)' : ''}`.toUpperCase(), PAGE.left, cursorY, 'F2', 10, '0.05 0.25 0.4 rg')
+    cursorY -= 10
     addRule(cursorY, '0.88 0.91 0.93 RG')
-    cursorY -= 16
-  }
-
-  function startPageWithSection(title) {
-    addPageHeader()
-    addSectionHeading(title)
+    cursorY -= 8
+    if (EXPERIMENTAL_SECTIONS.has(title)) {
+      addText('Experimental model output for review; not a diagnosis.', PAGE.left, cursorY, 'F1', 7, '0.35 g')
+      cursorY -= 6
+    }
+    cursorY -= RULE_ABOVE + CAP_HEIGHT - 0.5
   }
 
   addPageHeader()
   if (sections.length === 0) {
-    addText('No health entries are available.', 50, cursorY, 'F1', 10)
+    addText('No health entries are available.', PAGE.left, cursorY, 'F1', 10)
   }
 
   for (const section of sections) {
-    // Raise page-break threshold so a full section heading + at least one row always fits
     if (cursorY < 150) addPageHeader()
     addSectionHeading(section.title)
 
     for (const row of section.rows) {
-      // Narrower label column (36) + narrower value column (40) keeps a clear centre gutter
-      const labelLines = wrapPdfLine(row.item, 36)
-      const value = [row.value, row.unit].filter((part) => part !== '').join(' ') || 'Not recorded'
-      const valueLines = wrapPdfLine(value, 40)
-      const details = [
-        row.recordedAt ? `Recorded: ${row.recordedAt}` : '',
-        row.notes,
-      ].filter(Boolean).join(' | ')
-      const detailLines = details ? wrapPdfLine(details, 100) : []
+      const { label, notes, value } = describeRow(row)
+      const labelLines = wrapPdfLine(label, 9, 270)
+      const valueLines = wrapPdfLine(value, 9, 220)
+      const details = [row.recordedAt ? `Recorded: ${formatRecordedAt(row.recordedAt)}` : '', notes]
+        .filter(Boolean)
+        .join(' | ')
+      const detailLines = details ? wrapPdfLine(details, 7, 512) : []
       const lineCount = Math.max(labelLines.length, valueLines.length)
-      const LINE_H = 14   // slightly more generous line height (was 13)
-      const textHeight = lineCount * LINE_H
-      // 4 px gap + detail lines (11 px each) + 14 px bottom padding
-      const rowHeight = textHeight + (detailLines.length ? detailLines.length * 11 + 4 : 0) + 14
+      const lastTextOffset = (lineCount - 1) * LINE_H
+      const lastBaselineOffset = detailLines.length
+        ? lastTextOffset + DETAIL_FIRST + (detailLines.length - 1) * DETAIL_H
+        : lastTextOffset
+      const rowHeight = lastBaselineOffset + RULE_BELOW + RULE_ABOVE + CAP_HEIGHT
 
-      if (cursorY - rowHeight < 70) {
-        startPageWithSection(section.title)
+      if (cursorY - lastBaselineOffset - RULE_BELOW < PAGE.bottomText) {
+        addPageHeader()
+        addSectionHeading(section.title, true)
       }
 
       for (let index = 0; index < lineCount; index += 1) {
         const lineY = cursorY - index * LINE_H
-        if (labelLines[index]) addText(labelLines[index], 50, lineY, 'F1', 9)
-        if (valueLines[index]) {
-          const valueX = 562 - pdfTextWidth(valueLines[index], 9)
-          addText(valueLines[index], valueX, lineY, 'F1', 9)
-        }
+        if (labelLines[index]) addText(labelLines[index], PAGE.left, lineY, 'F1', 9)
+        if (valueLines[index]) addRightText(valueLines[index], lineY, 'F1', 9)
+      }
+      let detailY = cursorY - lastTextOffset - DETAIL_FIRST
+      for (const detailLine of detailLines) {
+        addText(detailLine, PAGE.left, detailY, 'F1', 7, '0.35 g')
+        detailY -= DETAIL_H
       }
 
-      // Detail lines start directly after main text rows (no extra leading gap)
-      let detailY = cursorY - textHeight - 2
-      for (const detailLine of detailLines) {
-        addText(detailLine, 50, detailY, 'F1', 7, '0.35 g')
-        detailY -= 11
-      }
+      // Separator sits RULE_BELOW under this row's last baseline and RULE_ABOVE over the next row.
+      addRule(cursorY - lastBaselineOffset - RULE_BELOW)
       cursorY -= rowHeight
-      // Separator sits 6 px above next row's start, well clear of text above and below
-      addRule(cursorY + 6)
     }
   }
 
   pages.forEach((commands, pageIndex) => {
     const pageText = `Page ${pageIndex + 1} of ${pages.length}`
-    // Right-align the page number so it never overflows on large reports
-    const pageNumX = (562 - pdfTextWidth(pageText, 8)).toFixed(2)
+    const pageNumX = (PAGE.right - pdfTextWidth(pageText, 8)).toFixed(2)
     commands.push(
       '0.45 g\nBT /F1 8 Tf 50 35 Td (Health information for review only) Tj ET',
       `0.45 g\nBT /F1 8 Tf ${pageNumX} 35 Td (${escapePdfText(pageText)}) Tj ET`,
@@ -409,7 +458,8 @@ export function downloadReport(rows, format, date = new Date()) {
   }
 
   const content = format === 'csv' ? createCsvReport(rows) : createPdfReport(rows)
-  const blob = new Blob([content], {
+  // A UTF-8 byte-order mark lets Excel read accented characters in the CSV correctly.
+  const blob = new Blob(format === 'csv' ? ['\uFEFF', content] : [content], {
     type: format === 'csv' ? 'text/csv;charset=utf-8' : 'application/pdf',
   })
   const url = URL.createObjectURL(blob)
