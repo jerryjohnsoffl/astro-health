@@ -185,7 +185,7 @@ function escapePdfText(value) {
   return toPdfText(value).replace(/[\\()]/g, '\\$&')
 }
 
-function wrapPdfLine(value, maxLength = 92) {
+function wrapPdfLine(value, maxLength = 90) {
   const words = toPdfText(value)
     .split(/\s+/)
     .flatMap((word) => {
@@ -285,24 +285,29 @@ export function createPdfReport(rows) {
   function addPageHeader() {
     pageCommands = []
     pages.push(pageCommands)
+    // Title — left side
     addText('MEDICAL HEALTH REPORT', 50, 750, 'F2', 17, '0.05 0.25 0.4 rg')
+    // Right-align name & crew ID; keep them well above the left-side date block
     const nameText = `Name: ${name}`
     const crewIdText = `Crew ID: ${crewId}`
-    addText(nameText, 562 - pdfTextWidth(nameText, 10), 740, 'F1', 10)
-    addText(crewIdText, 562 - pdfTextWidth(crewIdText, 10), 724, 'F1', 10)
-    addText(`Date: ${date}`, 50, 720, 'F1', 10)
+    addText(nameText, 562 - pdfTextWidth(nameText, 10), 750, 'F1', 10)
+    addText(crewIdText, 562 - pdfTextWidth(crewIdText, 10), 736, 'F1', 10)
+    // Left-side date / time block — moved down so it doesn't crowd the title
+    addText(`Date: ${date}`, 50, 718, 'F1', 10)
     addText(`Time: ${time}`, 50, 704, 'F1', 10)
-    addText(`Mission: ${environment} | Units: ${units}`, 50, 686, 'F1', 9, '0.3 g')
-    addText('Decision-support information only; not a medical diagnosis.', 50, 672, 'F1', 8, '0.35 g')
-    addRule(660)
-    cursorY = 642
+    addText(`Mission: ${environment} | Units: ${units}`, 50, 688, 'F1', 9, '0.3 g')
+    addText('Decision-support information only; not a medical diagnosis.', 50, 674, 'F1', 8, '0.35 g')
+    addRule(662)
+    cursorY = 644
   }
 
   function addSectionHeading(title) {
+    // Extra top-of-section breathing room
+    cursorY -= 6
     addText(title.toUpperCase(), 50, cursorY, 'F2', 10, '0.05 0.25 0.4 rg')
-    cursorY -= 9
+    cursorY -= 12
     addRule(cursorY, '0.88 0.91 0.93 RG')
-    cursorY -= 17
+    cursorY -= 16
   }
 
   function startPageWithSection(title) {
@@ -316,27 +321,32 @@ export function createPdfReport(rows) {
   }
 
   for (const section of sections) {
-    if (cursorY < 120) addPageHeader()
+    // Raise page-break threshold so a full section heading + at least one row always fits
+    if (cursorY < 150) addPageHeader()
     addSectionHeading(section.title)
 
     for (const row of section.rows) {
-      const labelLines = wrapPdfLine(row.item, 38)
+      // Narrower label column (36) + narrower value column (40) keeps a clear centre gutter
+      const labelLines = wrapPdfLine(row.item, 36)
       const value = [row.value, row.unit].filter((part) => part !== '').join(' ') || 'Not recorded'
-      const valueLines = wrapPdfLine(value, 38)
+      const valueLines = wrapPdfLine(value, 40)
       const details = [
         row.recordedAt ? `Recorded: ${row.recordedAt}` : '',
         row.notes,
       ].filter(Boolean).join(' | ')
-      const detailLines = details ? wrapPdfLine(details, 105) : []
-      const textHeight = Math.max(labelLines.length, valueLines.length) * 13
-      const rowHeight = textHeight + (detailLines.length ? detailLines.length * 10 + 3 : 0) + 10
+      const detailLines = details ? wrapPdfLine(details, 100) : []
+      const lineCount = Math.max(labelLines.length, valueLines.length)
+      const LINE_H = 14   // slightly more generous line height (was 13)
+      const textHeight = lineCount * LINE_H
+      // 4 px gap + detail lines (11 px each) + 14 px bottom padding
+      const rowHeight = textHeight + (detailLines.length ? detailLines.length * 11 + 4 : 0) + 14
 
-      if (cursorY - rowHeight < 62) {
+      if (cursorY - rowHeight < 70) {
         startPageWithSection(section.title)
       }
 
-      for (let index = 0; index < Math.max(labelLines.length, valueLines.length); index += 1) {
-        const lineY = cursorY - index * 13
+      for (let index = 0; index < lineCount; index += 1) {
+        const lineY = cursorY - index * LINE_H
         if (labelLines[index]) addText(labelLines[index], 50, lineY, 'F1', 9)
         if (valueLines[index]) {
           const valueX = 562 - pdfTextWidth(valueLines[index], 9)
@@ -344,20 +354,25 @@ export function createPdfReport(rows) {
         }
       }
 
-      let detailY = cursorY - textHeight
+      // Detail lines start directly after main text rows (no extra leading gap)
+      let detailY = cursorY - textHeight - 2
       for (const detailLine of detailLines) {
-        detailY -= 10
         addText(detailLine, 50, detailY, 'F1', 7, '0.35 g')
+        detailY -= 11
       }
       cursorY -= rowHeight
-      addRule(cursorY + 4)
+      // Separator sits 6 px above next row's start, well clear of text above and below
+      addRule(cursorY + 6)
     }
   }
 
   pages.forEach((commands, pageIndex) => {
+    const pageText = `Page ${pageIndex + 1} of ${pages.length}`
+    // Right-align the page number so it never overflows on large reports
+    const pageNumX = (562 - pdfTextWidth(pageText, 8)).toFixed(2)
     commands.push(
       '0.45 g\nBT /F1 8 Tf 50 35 Td (Health information for review only) Tj ET',
-      `0.45 g\nBT /F1 8 Tf 510 35 Td (Page ${pageIndex + 1} of ${pages.length}) Tj ET`,
+      `0.45 g\nBT /F1 8 Tf ${pageNumX} 35 Td (${escapePdfText(pageText)}) Tj ET`,
     )
   })
 
